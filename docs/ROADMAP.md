@@ -2,16 +2,17 @@
 
 Status legend: [ ] planned, [~] in progress, [x] done.
 
-## M1 — Repo and app skeleton (v0.1.0)
+## M1 — Repo and app skeleton (v0.1.0–0.1.1)
 - [x] Gradle multi-module skeleton (all modules created, boundaries fixed)
 - [x] Version catalog (`gradle/libs.versions.toml`) + `gradle.properties` version plumbing
 - [x] `build.bat` (env checks, first-run keystore, APK publish to `oneCR/Android/oneCR-v<version>.apk`)
 - [x] Gradle wrapper (8.10.2) + CI (`.github/workflows/android.yml`) + dependabot
 - [x] Repo hygiene: LICENSE (MIT), SECURITY.md, PRIVACY.md, CONTRIBUTING.md, README.md, templates
 - [x] docs/: ARCHITECTURE, ROADMAP, COMPATIBILITY, BRANDING
-- [x] Compose app shell: Dashboard / Library / Settings navigation, theme, adaptive icon placeholder
-- [x] Swap in real `logo.svg` (owner provides; see docs/BRANDING.md) — placeholder icon shipped
-- [x] Toolchain-verified compile: Gradle 8.10.2, AGP 8.7.3, Kotlin 2.0.21, JDK 17 — `assembleDebug`, `assembleRelease`, `test` all green; release-signing flow simulated end-to-end
+- [x] Compose app shell: Dashboard / Library / Settings navigation, theme, adaptive icon
+- [x] Official logo vectorized and shipped as adaptive icon + in-app branding (v0.1.1)
+- [x] R8 code/resource shrinking enabled for release builds — APK ~1.5 MB (v0.1.1)
+- [x] Toolchain-verified compile: Gradle 8.10.2, AGP 8.7.3, Kotlin 2.0.21, JDK 17 — `assembleDebug`, `assembleRelease`, `test` all green; release-signing flow verified end-to-end (apksigner + zipalign checks green)
 - [ ] Verified on a real device from a clean clone via `build.bat` (owner)
 
 ## M2 — Privilege bridge and call detection

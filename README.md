@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/branding/logo.svg" width="128" alt="oneCR logo" />
+
 # oneCR
 
 **Local-first, privacy-focused call recorder for Android 11+ with on-device AI transcription and summarization.**
@@ -9,7 +11,7 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%2011%2B%20%28arm64%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange)](docs/ROADMAP.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-orange)](CHANGELOG.md)
 
 </div>
 
@@ -54,6 +56,16 @@ build.bat --help
 
 Linux/macOS: `./gradlew :app:assembleDebug`.
 
+## Installing a prebuilt APK
+
+Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/releases) (or the `oneCR/Android/` folder after a local build) and open it on your phone:
+
+1. **Android 11 or newer is required** (API 30+). On Android 10 or older the installer will refuse the package — that is the `minSdk` floor, not a corrupt file.
+2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
+3. **Uninstall any older oneCR build first if it was signed with a different key.** Each machine generates its own local keystore in `.signing/`, so an APK built on your PC and one downloaded from Releases will not share signatures — Android rejects updates across signatures with an install error. Settings → Apps → oneCR → Uninstall, then install fresh.
+4. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.1.1.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+5. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning.
+
 ## Project structure
 
 ```
@@ -67,7 +79,9 @@ oneCR/
 ├── data/                      Room database + file/model storage
 ├── ai/                        whisper.cpp + llama.cpp JNI wrappers, pipeline
 ├── third_party/               pinned native dependencies (added at M5)
-└── docs/                      architecture, roadmap, compatibility, branding
+├── docs/                      architecture, roadmap, compatibility, branding
+│   └── branding/              logo.svg, logo-flat.svg, PNG exports
+└── CHANGELOG.md               release history
 ```
 
 The full engineering plan, privilege model and database schema live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the milestone plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
