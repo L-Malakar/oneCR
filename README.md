@@ -11,7 +11,7 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%2011%2B%20%28arm64%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.1.1-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.2-orange)](CHANGELOG.md)
 
 </div>
 
@@ -60,11 +60,12 @@ Linux/macOS: `./gradlew :app:assembleDebug`.
 
 Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/releases) (or the `oneCR/Android/` folder after a local build) and open it on your phone:
 
-1. **Android 11 or newer is required** (API 30+). On Android 10 or older the installer will refuse the package — that is the `minSdk` floor, not a corrupt file.
+1. **Android 8.0 or newer is required to install** (API 26+). The capture features that ship from M2 onward need **Android 11+** — the app checks that at runtime and shows a clear message, instead of refusing to install.
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
-3. **Uninstall any older oneCR build first if it was signed with a different key.** Each machine generates its own local keystore in `.signing/`, so an APK built on your PC and one downloaded from Releases will not share signatures — Android rejects updates across signatures with an install error. Settings → Apps → oneCR → Uninstall, then install fresh.
-4. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.1.1.apk SHA256` on Windows). A truncated download is the most common cause of that error.
-5. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning.
+3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
+4. If an older oneCR build is already installed and the new one refuses to install over it, uninstall the old one first (Settings → Apps → oneCR → Uninstall). This only happens across different signing keys; the prebuilt releases and your own `build.bat` builds share the `.signing/` keystore shipped in the source zip, so they update in place.
+5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.1.2.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+6. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning.
 
 ## Project structure
 
@@ -88,7 +89,7 @@ The full engineering plan, privilege model and database schema live in [docs/ARC
 
 ## Device compatibility
 
-oneCR targets Android 11+ on arm64-v8a. Behavior varies by OEM — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known constraints and how to add your device. Highlights: on OPPO/OnePlus/Realme enable "Disable permission monitoring"; on aggressive OEMs (MIUI/OxygenOS/One UI) exclude oneCR from battery optimization and allow auto-launch.
+The APK installs on Android 8+; the recording features target Android 11+ on arm64-v8a. Behavior varies by OEM — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known constraints and how to add your device. Highlights: on OPPO/OnePlus/Realme enable "Disable permission monitoring"; on aggressive OEMs (MIUI/OxygenOS/One UI) exclude oneCR from battery optimization and allow auto-launch.
 
 ## Legal notice
 

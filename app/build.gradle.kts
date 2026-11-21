@@ -26,7 +26,10 @@ android {
 
     defaultConfig {
         applicationId = "com.lmalakar.onecr"
-        minSdk = 30
+        // Install floor = Android 8.0 so the shell reaches every device that may
+        // sideload a smoke-test APK. Production capture features (M2+) require
+        // Android 11+ and are gated at runtime, not at install time.
+        minSdk = 26
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName

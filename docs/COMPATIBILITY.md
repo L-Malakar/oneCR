@@ -2,6 +2,11 @@
 
 oneCR's shell-privilege capture depends on OEM audio routing, so behavior is device-specific. This file is the field journal: **add a row for every device you test**, with what worked.
 
+## Install floor vs. feature floor
+
+- **Installing:** the APK installs on **Android 8.0+ (API 26+)**. If a phone shows "There was a problem parsing the package", the download is corrupt or truncated — not a version issue.
+- **Recording (M2+):** cellular capture via the embedded-ADB bridge needs **Android 11+ (API 30+)** wireless-debugging pairing; the app detects the Android version at runtime and explains what is missing. Shizuku mode works on older versions if Shizuku itself runs there.
+
 ## Known platform constraints (from the CallVault / ShizuCallRecorder field notes)
 
 | Constraint | Detail | Workaround |

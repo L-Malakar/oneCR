@@ -4,6 +4,30 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.1.2] — 2026-11-22
+
+### Fixed
+- **"There was a problem parsing the package" on Android 10 and older phones.**
+  v0.1.1 declared `minSdk 30` (Android 11+), so Android's package parser rejected
+  the whole APK on older devices before it could even show the app icon — the
+  error looked like a corrupt file but was an install-floor mismatch. The
+  install floor is now **Android 8.0 (API 26)** across all modules, so the
+  smoke-test APK installs on any modern phone. The production capture features
+  still require Android 11+; that gate moves to runtime checks in M2 instead of
+  blocking the install.
+- APK now signed with **v1 + v2 + v3** signature schemes simultaneously
+  (previously v2 only) for maximum compatibility across OEM package installers.
+
+### Added
+- The local signing keystore generated for prebuilt releases is now shipped in
+  `.signing/` inside the source zip (still gitignored). `build.bat` reuses it,
+  so APKs you build yourself install as in-place updates over the prebuilt
+  release APK — no more signature-mismatch uninstall dance between the two.
+
+### Changed
+- Version bumped to 0.1.2 (versionCode 3).
+- README install guide rewritten around the new Android 8+ install floor.
+
 ## [0.1.1] — 2026-11-21
 
 ### Added
