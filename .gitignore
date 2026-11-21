@@ -1,0 +1,23 @@
+# ---- oneCR build output (created by build.bat) ----
+/oneCR/
+
+# ---- Local signing material (NEVER commit) ----
+/.signing/
+
+# ---- Android / Gradle ----
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+.kotlin/
+*.apk.idsig
+
+# ---- Model artifacts (never store models in git) ----
+*.gguf
+*.bin
+!gradle/wrapper/gradle-wrapper.jar

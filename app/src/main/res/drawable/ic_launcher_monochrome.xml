@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White silhouette for Android 13+ themed (monochrome) icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,32 h14 a4,4 0 0 1 4,4 v13 a11,11 0 0 1 -22,0 v-13 a4,4 0 0 1 4,-4 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,59 h6 v12 h-6 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,72 h20 a3,3 0 0 1 0,6 h-20 a3,3 0 0 1 0,-6 z" />
+</vector>

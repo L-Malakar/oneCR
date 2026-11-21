@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Placeholder launcher glyph (see docs/BRANDING.md for swapping in logo.svg):
+    a microphone silhouette in the brand teal with a dark "record" dot,
+    sized to the 66dp adaptive-icon safe zone (content spans roughly 43..65 x, 32..78 y).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- microphone capsule -->
+    <path
+        android:fillColor="#14B8A6"
+        android:pathData="M47,32 h14 a4,4 0 0 1 4,4 v13 a11,11 0 0 1 -22,0 v-13 a4,4 0 0 1 4,-4 z" />
+    <!-- record dot on the capsule -->
+    <path
+        android:fillColor="#0B1220"
+        android:pathData="M54,42 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
+    <!-- stem -->
+    <path
+        android:fillColor="#14B8A6"
+        android:pathData="M51,59 h6 v12 h-6 z" />
+    <!-- base -->
+    <path
+        android:fillColor="#14B8A6"
+        android:pathData="M44,72 h20 a3,3 0 0 1 0,6 h-20 a3,3 0 0 1 0,-6 z" />
+</vector>
