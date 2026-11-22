@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
@@ -29,6 +30,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +39,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +61,16 @@ import java.util.Locale
  * The v0.2.2 notification center — one place for everything the app needs
  * (permissions, bridge, detection), every error, and the recent activity log.
  * Opened from the bell icon in the top bar.
+ *
+ * v0.2.4: the hand-rolled header row became a real Material 3 top app bar.
+ * The old row drew its title in the ambient content color, which defaults to
+ * plain black outside a Surface — i.e. the title stayed black on the navy
+ * background in dark mode. The top app bar paints with the scheme's surface
+ * and onSurface colors, so the title, back arrow and status line follow the
+ * theme in both modes, and the panel finally has a proper top bar with a
+ * divider under it (no bottom bar, as before).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationCenterScreen(
     model: NotificationModel,
@@ -104,34 +118,49 @@ fun NotificationCenterScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-                .padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Notifications", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    text = when {
-                        model.needs.isNotEmpty() && model.errors.isNotEmpty() ->
-                            "${model.needs.size} need attention · ${model.errors.size} error(s)"
-                        model.needs.isNotEmpty() -> "${model.needs.size} thing(s) need attention"
-                        model.errors.isNotEmpty() -> "${model.errors.size} error(s)"
-                        else -> "All clear"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(onClick = onMarkAllSeen, enabled = model.badgeCount > 0) {
-                Text("Mark read")
-            }
-        }
+        // ---- Top bar (v0.2.4): themed title + back + "Mark read" ------------
+        TopAppBar(
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.Notifications,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Column {
+                        Text("Notifications", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = when {
+                                model.needs.isNotEmpty() && model.errors.isNotEmpty() ->
+                                    "${model.needs.size} need attention · ${model.errors.size} error(s)"
+                                model.needs.isNotEmpty() -> "${model.needs.size} thing(s) need attention"
+                                model.errors.isNotEmpty() -> "${model.errors.size} error(s)"
+                                else -> "All clear"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                TextButton(onClick = onMarkAllSeen, enabled = model.badgeCount > 0) {
+                    Text("Mark read")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         if (model.isEmpty) {
             EmptyState(
@@ -145,6 +174,7 @@ fun NotificationCenterScreen(
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
+                    .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {

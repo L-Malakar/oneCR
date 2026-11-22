@@ -99,10 +99,13 @@ class AppContainer(appContext: Context) {
     /** Compose-observable mirror of [AppSettingsStore.themeMode]; SYSTEM by default. */
     val themeMode = mutableStateOf(settings.themeMode)
 
-    /** Persist a theme choice and recompose the UI in one step. */
+    /** Persist a theme choice, recompose the UI and re-sync the platform night mode. */
     fun setThemeMode(mode: ThemeMode) {
         settings.themeMode = mode
         themeMode.value = mode
+        // v0.2.4: the window background, system bars and platform dialogs follow
+        // the app setting too, not just the Compose palette.
+        applyPlatformNightMode(mode)
     }
 
     // ---- Notification center (v0.2.2) ----

@@ -10,8 +10,8 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 
 <!-- Download button: on every release, bump the version in the link AND in the button label. -->
 <p>
-  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.3/oneCR-v0.2.3.apk">
-    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.3%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.3 APK"/>
+  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.4/oneCR-v0.2.4.apk">
+    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.4%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.4 APK"/>
   </a>
   &nbsp;
   <a href="https://github.com/L-Malakar/oneCR/releases">
@@ -22,7 +22,7 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28all%20ABIs%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.2.3-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.4-orange)](CHANGELOG.md)
 
 </div>
 
@@ -41,7 +41,11 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | **One-by-one permission wizard** — every system dialog appears only on an explicit tap | **v0.2.2** |
 | **Back navigation that behaves** — back walks your screen history; at the root it asks for a second press before exiting | **v0.2.3** |
 | **Professional theming** — complete Material 3 palette in dark & light, no more off-palette dialogs; themed window background; redesigned About screen | **v0.2.3** |
-| **Green CI** — the Android workflow survives Windows checkouts (gradlew exec bit) and hardens tag releases | **v0.2.3** |
+| **Dark mode that follows the app** — the theme pin (Dark/Light/System) now re-themes the platform too: window background, system bars, dialogs, and the setup wizard | **v0.2.4** |
+| **Notification center top bar** — a real themed app bar on the panel: white title & icons in dark mode, divider, "Mark read" in place | **v0.2.4** |
+| **Fixed wizard bottom bar** — Next / Back / Finish stay pinned at the bottom edge of the setup screen while the step content scrolls | **v0.2.4** |
+| **Icon-driven UI** — per-step wizard icons, play/stop on detection buttons, moon/sun/contrast theme icons, icon rows in About | **v0.2.4** |
+| Green CI — the Android workflow survives Windows checkouts (gradlew exec bit) and hardens tag releases | **v0.2.3** |
 | Embedded ADB bridge (no extra app; wireless-debugging pairing on-device) | v0.3.0 (M2.5) |
 | Two-sided cellular call recording through the shell bridge | M3 |
 | VoIP call recording via playback capture + mic mix | M3 |
@@ -89,8 +93,8 @@ Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/r
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
 4. **Play Protect may stop the install with "This app can request access to sensitive data."** That warning is automatic for *any* sideloaded app that requests Call Log / Phone permissions — it is a heuristic caution, not a malware verdict (the code is public in this repo and each release lists its SHA-256). Tap **More details → Install anyway (unsafe)** to continue. To stop the prompts for good: Play Store → profile icon → **Play Protect** → ⚙ **Settings** → turn off **Scan apps with Play Protect** (and **Require Play Protect review for apps** on Android 15+). It cannot be avoided in code — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md#play-protect-and-sideloading).
-5. **Updating:** from v0.2.0 the release keystore is stable, so v0.2.3 installs in place over v0.2.0/v0.2.1/v0.2.2 — nothing to do. Only the v0.1.2 pre-release (signed with the lost original key) needs a one-time uninstall first.
-6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.3.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+5. **Updating:** from v0.2.0 the release keystore is stable, so v0.2.4 installs in place over v0.2.0/v0.2.1/v0.2.2/v0.2.3 — nothing to do. The Releases page currently hosts **v0.2.0 and newer** (the 0.1.x pre-releases were removed from GitHub); if you are still on one of those removed pre-release builds, uninstall it once and install v0.2.4 fresh.
+6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.4.apk SHA256` on Windows). A truncated download is the most common cause of that error.
 7. Some OEM ROMs (MIUI/ColorOS) also block sideloads under "Install via USB" — approve the install when prompted, or enable that toggle in Developer options.
 
 ## Project structure

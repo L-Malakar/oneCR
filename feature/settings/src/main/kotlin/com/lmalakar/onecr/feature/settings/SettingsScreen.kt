@@ -1,6 +1,7 @@
 package com.lmalakar.onecr.feature.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.List
@@ -40,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
@@ -55,6 +60,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 private enum class SettingsPage { ROOT, PERMISSIONS, EVENT_LOG }
+
+/** Leading icon for each theme choice (v0.2.4 — icons over words where possible). */
+private fun themeIcon(mode: ThemeMode): ImageVector = when (mode) {
+    ThemeMode.SYSTEM -> Icons.Filled.Contrast
+    ThemeMode.DARK -> Icons.Filled.DarkMode
+    ThemeMode.LIGHT -> Icons.Filled.LightMode
+}
 
 /**
  * v0.2.2 settings: the same sections as v0.2.1 (theme, bridge, permissions,
@@ -151,6 +163,7 @@ private fun RootSettings(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -186,10 +199,22 @@ private fun RootSettings(
                             selected = mode == themeMode,
                             onClick = { onThemeChange(mode) },
                         )
+                        Icon(
+                            imageVector = themeIcon(mode),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .size(18.dp),
+                            tint = if (mode == themeMode) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
                         Text(
                             text = mode.label,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(start = 4.dp),
+                            modifier = Modifier.padding(start = 10.dp),
                         )
                     }
                 }
@@ -342,7 +367,7 @@ private fun SettingsLink(
                 )
             }
             Icon(
-                imageVector = Icons.Filled.ArrowForward,
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,

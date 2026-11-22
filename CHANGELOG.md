@@ -4,6 +4,62 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.2.4] — 2026-11-22
+
+Theme-and-controls release: **dark mode now follows the app everywhere, the
+notification center has a real top bar, and the setup wizard's buttons are
+pinned to the bottom.** Fixes the three dark-mode bugs reported on v0.2.3
+(black panel title on navy, missing panel top bar, light-only setup wizard)
+and shifts the UI further towards icons over prose.
+
+### Added
+- **Icon-driven UI** (`:app`, `:feature:*`): `material-icons-extended` joins
+  the classpath (R8 strips unused icons; the release APK stays small). The
+  setup wizard shows a per-step header icon and distinct permission-task
+  icons (call log = history, notification access = active bell, battery =
+  charging); Dashboard's Start/Stop detection buttons carry play/stop
+  glyphs; theme choices get system-contrast / moon / sun icons; the guided
+  permission flow, "Clear log" and the About rows grew leading icons, with a
+  chevron on the Project home row.
+- **Aliyun Maven mirror** (`settings.gradle.kts`): consulted before Maven
+  Central for third-party artifacts because Central's HTTP 429 rate limiting
+  aborted first-time builds on some IPs. Central remains the canonical
+  fallback; CI behavior is unchanged.
+
+### Fixed
+- **Notification center title stayed black in dark mode** (`:app`): the
+  hand-rolled header drew its title with the ambient content color, which
+  defaults to black outside a Surface — black on navy. The header is now a
+  real Material 3 `TopAppBar` (surface container, `onSurface` title, bell
+  glyph, live status line, "Mark read" action) plus a divider under it —
+  which also delivers the long-requested **top bar for the notification
+  panel** (no bottom bar, as before).
+- **"Set up oneCR" ignored the dark theme** (`:app`, `:core:model`): the
+  Compose palette followed the theme setting, but the platform layer — the
+  window background the transparent wizard draws on top of, system bars and
+  platform dialogs — kept following the OS. The host activity is now an
+  `AppCompatActivity` on a `Theme.AppCompat.DayNight` theme, and the
+  persisted theme mode is synced through `AppCompatDelegate.setDefaultNightMode()`
+  on app start and on every change, so **Dark pins dark everywhere, Light
+  pins light, System follows the OS**. Every screen root additionally paints
+  `colorScheme.background`, so no translucent surface can leak the light
+  window underneath (onboarding, dashboard, settings root, permission
+  center, event log, library).
+- **Setup wizard buttons drifted with content** (`:feature:onboarding`): the
+  Next/Back/Finish row was part of the scrollable column, so its position
+  moved with each step's text length. The wizard is now a three-region
+  column — fixed header (step icon + title + progress), scrollable step
+  content, and a **fixed bottom bar** that always sits at the screen edge.
+  Back and Finish gained arrow/check icons; the header/status/nav bar
+  insets are handled by the screen itself since it renders without the
+  shell's Scaffold.
+
+### Changed
+- Version bumped to 0.2.4 (versionCode 8). The GitHub Releases page hosts
+  **v0.2.0 and newer** — the 0.1.x pre-releases were removed from the page;
+  README and release notes now point new installs at v0.2.4 and describe the
+  one-time uninstall path only for upgrades from those removed pre-releases.
+
 ## [0.2.3] — 2026-11-22
 
 Polish release: **back navigation that behaves, a fixed dark theme, a

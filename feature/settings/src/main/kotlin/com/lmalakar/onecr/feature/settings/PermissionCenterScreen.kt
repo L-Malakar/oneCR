@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,10 +22,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -105,7 +110,7 @@ fun PermissionCenterScreen(
             GuidedTask(
                 id = "call_log", title = "Call log",
                 rationale = "Resolve the number and contact name of calls after they end. Read locally, never uploaded.",
-                icon = Icons.Filled.Phone,
+                icon = Icons.Filled.History,
                 granted = s.callLogGranted,
                 actionLabel = "Allow call log access",
             ) to { singleLauncher.launch(Manifest.permission.READ_CALL_LOG) },
@@ -125,7 +130,7 @@ fun PermissionCenterScreen(
             GuidedTask(
                 id = "listener", title = "Notification access",
                 rationale = "Detect ongoing WhatsApp/VoIP calls — reads only the category flag of allowlisted apps.",
-                icon = Icons.Filled.Notifications,
+                icon = Icons.Filled.NotificationsActive,
                 granted = s.notificationListenerEnabled,
                 actionLabel = "Open notification access settings",
             ) to {
@@ -136,7 +141,7 @@ fun PermissionCenterScreen(
             GuidedTask(
                 id = "battery", title = "Battery optimization exemption",
                 rationale = "Stop OEM battery savers from pausing detection mid-call.",
-                icon = Icons.Filled.Settings,
+                icon = Icons.Filled.BatteryChargingFull,
                 granted = s.batteryExempt,
                 actionLabel = "Exempt from battery optimization",
             ) to {
@@ -158,6 +163,7 @@ fun PermissionCenterScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -188,6 +194,8 @@ fun PermissionCenterScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
+                        Icon(Icons.Filled.TouchApp, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.size(8.dp))
                         Text("Grant one by one (guided setup)")
                     }
                     Text(

@@ -15,10 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Architecture
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -111,10 +112,11 @@ internal fun AboutSection(
 
         // ---- Facts -------------------------------------------------------
         AboutRow(
-            icon = Icons.Filled.ExitToApp,
+            icon = Icons.Filled.Code,
             title = "Project home",
             detail = "github.com/L-Malakar/oneCR — source, releases and issue tracker",
             detailColor = MaterialTheme.colorScheme.primary,
+            showChevron = true,
             onClick = {
                 runCatching {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_URL)))
@@ -122,19 +124,19 @@ internal fun AboutSection(
             },
         )
         AboutRow(
-            icon = Icons.Filled.Lock,
+            icon = Icons.Filled.PrivacyTip,
             title = "Privacy by design",
             detail = "No cloud, no account, no telemetry. Audio, transcripts and the " +
                 "event log stay on this device — see PRIVACY.md.",
         )
         AboutRow(
-            icon = Icons.Filled.Info,
+            icon = Icons.Filled.Gavel,
             title = "License",
             detail = "MIT. Recording laws vary by region — use lawfully and inform " +
                 "call participants.",
         )
         AboutRow(
-            icon = Icons.Filled.Build,
+            icon = Icons.Filled.Architecture,
             title = "Build",
             detail = "oneCR v${appInfo.versionName} (${appInfo.buildType}), " +
                 "version code ${appInfo.versionCode}",
@@ -173,6 +175,7 @@ private fun AboutRow(
     title: String,
     detail: String,
     detailColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    showChevron: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     Surface(
@@ -203,6 +206,14 @@ private fun AboutRow(
                     text = detail,
                     style = MaterialTheme.typography.bodySmall,
                     color = detailColor,
+                )
+            }
+            if (showChevron) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

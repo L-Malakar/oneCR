@@ -2,6 +2,7 @@ package com.lmalakar.onecr.ui.dashboard
 
 import android.content.Intent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -92,6 +94,7 @@ fun DashboardScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -163,12 +166,20 @@ fun DashboardScreen(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                ) { Text("Stop detection") }
+                ) {
+                    Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Stop detection")
+                }
             } else {
                 Button(
                     onClick = { startDetection() },
                     modifier = Modifier.weight(1f),
-                ) { Text("Start detection") }
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text("Start detection")
+                }
             }
             OutlinedButton(
                 onClick = { container.privilegeMonitor.refreshAsync() },

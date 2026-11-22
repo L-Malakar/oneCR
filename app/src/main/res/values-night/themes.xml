@@ -1,5 +1,13 @@
 <resources>
-    <style name="Theme.oneCR" parent="android:Theme.Material.NoActionBar">
+    <!--
+        Night variant: same DayNight parent (the parent never switches on the
+        qualifier — the file exists only to retarget the window background to
+        the navy palette). uiMode itself is driven by the app theme setting
+        via AppCompatDelegate.setDefaultNightMode() (v0.2.4).
+    -->
+    <style name="Theme.oneCR" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@color/onecr_window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

@@ -7,25 +7,37 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -111,11 +123,29 @@ private data class PermissionTask(
 
 private enum class TaskState { DONE, ACTIVE, PENDING }
 
+/** Icon shown in the wizard's fixed header for the current step (v0.2.4). */
+private fun stepIcon(step: Int) = when (step) {
+    0 -> Icons.Filled.RocketLaunch
+    1 -> Icons.Filled.PhoneAndroid
+    2 -> Icons.Filled.Key
+    3 -> Icons.Filled.BatteryChargingFull
+    4 -> Icons.Filled.VerifiedUser
+    else -> Icons.Filled.CheckCircle
+}
+
 /**
  * The setup wizard: welcome → device check → privilege bridge (Shizuku) →
  * OEM survival steps → permissions (one by one) → done.
  *
  * The bridge step is honestly optional: capture needs it (M3), detection does not.
+ *
+ * v0.2.4 layout fix: the wizard is now a three-region column — a fixed header
+ * (title + progress), a scrollable step area and a **fixed bottom bar** that
+ * always sits at the bottom edge of the screen. Previously the Next/Back row
+ * was part of the scrollable content, so the buttons drifted up and down with
+ * the length of each step's text. The screen also paints the scheme's own
+ * background now, so it follows the dark theme even before the platform
+ * window background catches up.
  */
 @Composable
 fun OnboardingScreen(
@@ -143,63 +173,112 @@ fun OnboardingScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Set up oneCR", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Step ${step + 1} of $STEP_COUNT",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        LinearProgressIndicator(
-            progress = { (step + 1f) / STEP_COUNT },
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        when (step) {
-            0 -> WelcomeStep()
-            1 -> DeviceStep()
-            2 -> BridgeStep(
-                health = health,
-                isShizukuInstalled = isShizukuInstalled,
-                onInstallShizuku = onInstallShizuku,
-                onOpenShizuku = onOpenShizuku,
-                onRequestShizukuPermission = onRequestShizukuPermission,
-                onVerifyBridge = onVerifyBridge,
-            )
-            3 -> OemStep()
-            4 -> PermissionsStep(permissionSnapshot, onRefreshPermissions)
-            5 -> DoneStep(
-                versionName = versionName,
-                autostart = autostart,
-                onAutostartChange = { autostart = it },
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        // ---- Fixed header: icon + title + progress -------------------------
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (step > 0) {
-                OutlinedButton(onClick = { step-- }, modifier = Modifier.weight(1f)) {
-                    Text("Back")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Icon(
+                        imageVector = stepIcon(step),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(22.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                Column {
+                    Text("Set up oneCR", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "Step ${step + 1} of $STEP_COUNT",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            Button(
-                onClick = {
-                    if (step == STEP_COUNT - 1) onComplete(autostart) else step++
-                },
-                modifier = Modifier.weight(1f),
+            LinearProgressIndicator(
+                progress = { (step + 1f) / STEP_COUNT },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        // ---- Scrollable step content ----------------------------------------
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            when (step) {
+                0 -> WelcomeStep()
+                1 -> DeviceStep()
+                2 -> BridgeStep(
+                    health = health,
+                    isShizukuInstalled = isShizukuInstalled,
+                    onInstallShizuku = onInstallShizuku,
+                    onOpenShizuku = onOpenShizuku,
+                    onRequestShizukuPermission = onRequestShizukuPermission,
+                    onVerifyBridge = onVerifyBridge,
+                )
+                3 -> OemStep()
+                4 -> PermissionsStep(permissionSnapshot, onRefreshPermissions)
+                5 -> DoneStep(
+                    versionName = versionName,
+                    autostart = autostart,
+                    onAutostartChange = { autostart = it },
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        // ---- Fixed bottom bar: Back / Next / Finish never move (v0.2.4) ----
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(if (step == STEP_COUNT - 1) "Finish" else "Next")
-                Spacer(modifier = Modifier.size(6.dp))
-                Icon(Icons.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                if (step > 0) {
+                    OutlinedButton(onClick = { step-- }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("Back")
+                    }
+                }
+                Button(
+                    onClick = {
+                        if (step == STEP_COUNT - 1) onComplete(autostart) else step++
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (step == STEP_COUNT - 1) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text("Finish")
+                    } else {
+                        Text("Next")
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                }
             }
         }
     }
@@ -212,7 +291,7 @@ fun OnboardingScreen(
 @Composable
 private fun WelcomeStep() {
     StepScaffold(
-        icon = Icons.Filled.Phone,
+        icon = Icons.Filled.RocketLaunch,
         title = "oneCR — one call recorder",
         subtitle = "Local-first, privacy-focused call recording for Android.",
     ) {
@@ -227,7 +306,7 @@ private fun DeviceStep() {
     val sdk = Build.VERSION.SDK_INT
     val fullSupport = sdk >= 30
     StepScaffold(
-        icon = Icons.Filled.Settings,
+        icon = Icons.Filled.PhoneAndroid,
         title = "Device check",
         subtitle = "Android ${Build.VERSION.RELEASE} (API $sdk)",
     ) {
@@ -262,7 +341,7 @@ private fun BridgeStep(
     var verifyResult by remember { mutableStateOf<ShellCommandResult?>(null) }
 
     StepScaffold(
-        icon = Icons.Filled.Lock,
+        icon = Icons.Filled.Key,
         title = "Privilege bridge (Shizuku)",
         subtitle = when {
             !installed -> "Shizuku is not installed"
@@ -337,7 +416,7 @@ private fun OemStep() {
     val guidance = OEM_GUIDANCE.firstOrNull { entry -> entry.vendors.any { vendor.contains(it) } }
 
     StepScaffold(
-        icon = Icons.Filled.Settings,
+        icon = Icons.Filled.BatteryChargingFull,
         title = "Keep oneCR alive on this phone",
         subtitle = "Detected manufacturer: ${Build.MANUFACTURER}",
     ) {
@@ -379,7 +458,7 @@ private fun PermissionsStep(snapshot: PermissionSnapshot, onRefreshPermissions: 
                 id = "call_log",
                 title = "Call log",
                 description = "Resolve the number and contact name after a call ends — read locally, never uploaded.",
-                icon = Icons.Filled.Phone,
+                icon = Icons.Filled.History,
                 granted = snapshot.callLogGranted,
                 actionLabel = "Allow call log access",
                 onAction = { singleLauncher.launch(Manifest.permission.READ_CALL_LOG) },
@@ -403,7 +482,7 @@ private fun PermissionsStep(snapshot: PermissionSnapshot, onRefreshPermissions: 
                 id = "listener",
                 title = "Notification access",
                 description = "Detect ongoing WhatsApp/VoIP calls — reads only the category flag of allowlisted apps, never the text.",
-                icon = Icons.Filled.Notifications,
+                icon = Icons.Filled.NotificationsActive,
                 granted = snapshot.notificationListenerEnabled,
                 actionLabel = "Open notification access settings",
                 onAction = {
@@ -418,7 +497,7 @@ private fun PermissionsStep(snapshot: PermissionSnapshot, onRefreshPermissions: 
                 id = "battery",
                 title = "Battery optimization",
                 description = "Exempt oneCR so OEM battery savers don't pause detection mid-call.",
-                icon = Icons.Filled.Settings,
+                icon = Icons.Filled.BatteryChargingFull,
                 granted = snapshot.batteryExempt,
                 actionLabel = "Exempt from battery optimization",
                 onAction = {
@@ -438,7 +517,7 @@ private fun PermissionsStep(snapshot: PermissionSnapshot, onRefreshPermissions: 
     val activeIndex = tasks.indexOfFirst { !it.granted }
 
     StepScaffold(
-        icon = Icons.Filled.Phone,
+        icon = Icons.Filled.VerifiedUser,
         title = "Permissions — one at a time",
         subtitle = if (activeIndex == -1) {
             "All set — every permission granted."
@@ -612,7 +691,7 @@ private fun Bullet(text: String, good: Boolean? = null) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(
-            imageVector = if (good == true) Icons.Filled.CheckCircle else Icons.Filled.ArrowForward,
+            imageVector = if (good == true) Icons.Filled.CheckCircle else Icons.Filled.ChevronRight,
             contentDescription = null,
             modifier = Modifier
                 .size(18.dp)

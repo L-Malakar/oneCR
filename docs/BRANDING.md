@@ -1,6 +1,10 @@
 # Branding
 
-App name: **oneCR** · version: **0.1.1** · package: `com.lmalakar.onecr`
+App name: **oneCR** · package: `com.lmalakar.onecr`
+
+The version lives in exactly one place — `gradle.properties` (`VERSION_NAME`,
+consumed by `:app/build.gradle.kts` and `build.bat`) — so this file no longer
+pins one.
 
 ## The logo
 
