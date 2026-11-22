@@ -58,8 +58,18 @@ class CallDetectionService : Service() {
         }
         engine = detection
         createChannel()
-        startInForeground()
-        detection.start()
+        // A failed startForeground must stop the service or Android kills the
+        // process (ForegroundServiceDidNotStartInTime). The failure is logged
+        // as an error event so the notification center can show it (v0.2.2).
+        val foregroundOk = runCatching { startInForeground() }
+            .onFailure { e -> detection.logError("Foreground service failed to start: ${e.message}") }
+            .isSuccess
+        if (!foregroundOk) {
+            stopSelf()
+            return
+        }
+        runCatching { detection.start() }
+            .onFailure { e -> detection.logError("Detection engine failed to start: ${e.message}") }
 
         stateJob = serviceScope.launch {
             detection.callState.collect { state ->
@@ -107,6 +117,7 @@ class CallDetectionService : Service() {
     private fun updateNotification(text: String) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         runCatching { nm.notify(DetectionContract.NOTIFICATION_ID, buildNotification(text)) }
+            .onFailure { e -> engine?.logError("Could not update the detection notification: ${e.message}") }
     }
 
     private fun buildNotification(text: String): Notification =

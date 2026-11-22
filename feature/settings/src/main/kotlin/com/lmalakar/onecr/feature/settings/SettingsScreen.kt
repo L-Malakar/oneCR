@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -45,7 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lmalakar.onecr.core.designsystem.component.SectionHeader
 import com.lmalakar.onecr.core.model.AppInfo
+import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.EventLogEntry
 import com.lmalakar.onecr.privilege.api.PrivilegeAction
@@ -58,14 +59,17 @@ import kotlinx.coroutines.launch
 private enum class SettingsPage { ROOT, PERMISSIONS, EVENT_LOG }
 
 /**
- * v0.2.1 settings: theme picker + live privilege bridge card + permission center
- * + event log, with future sections (models, storage) still labeled by milestone.
+ * v0.2.2 settings: the same sections as v0.2.1 (theme, bridge, permissions,
+ * event log, about) grouped under section headers, with a live permission
+ * summary on the Permission center link.
  */
 @Composable
 fun SettingsScreen(
     appInfo: AppInfo,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
+    permissions: StateFlow<PermissionSnapshot>,
+    onRefreshPermissions: () -> Unit,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
     onGrantShizukuPermission: () -> Unit,
@@ -83,6 +87,7 @@ fun SettingsScreen(
             appInfo = appInfo,
             privilegeHealth = privilegeHealth,
             recentEvents = recentEvents,
+            permissions = permissions,
             themeMode = themeMode,
             onThemeChange = onThemeChange,
             onGrantShizukuPermission = onGrantShizukuPermission,
@@ -96,6 +101,8 @@ fun SettingsScreen(
         )
 
         SettingsPage.PERMISSIONS -> PermissionCenterScreen(
+            permissions = permissions,
+            onRefreshPermissions = onRefreshPermissions,
             onBack = { page = SettingsPage.ROOT },
             modifier = modifier,
         )
@@ -118,6 +125,7 @@ private fun RootSettings(
     appInfo: AppInfo,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
+    permissions: StateFlow<PermissionSnapshot>,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
     onGrantShizukuPermission: () -> Unit,
@@ -132,6 +140,7 @@ private fun RootSettings(
     val context = LocalContext.current
     val health by privilegeHealth.collectAsState()
     val events by recentEvents.collectAsState()
+    val permissionSnapshot by permissions.collectAsState()
     val verifyScope = rememberCoroutineScope()
     var verifyResult by remember { mutableStateOf<ShellCommandResult?>(null) }
 
@@ -139,12 +148,10 @@ private fun RootSettings(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 24.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
-
-        // ---------------- Appearance (v0.2.1) ----------------
+        SectionHeader("Appearance")
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -154,9 +161,13 @@ private fun RootSettings(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("Appearance", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Light or dark theme. \"System default\" follows your phone's dark-mode setting.",
+                    "Theme",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "\"System default\" follows your phone's dark-mode setting.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -181,7 +192,7 @@ private fun RootSettings(
             }
         }
 
-        // ---------------- Privilege bridge (live) ----------------
+        SectionHeader("Privilege bridge")
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -207,7 +218,7 @@ private fun RootSettings(
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
-                        "Privilege bridge — ${health.mode.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                        "Shizuku bridge — ${health.mode.name.lowercase().replaceFirstChar { it.uppercase() }}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                     )
@@ -256,15 +267,18 @@ private fun RootSettings(
             }
         }
 
-        // ---------------- Permission center ----------------
+        SectionHeader("Permissions and diagnostics")
         SettingsLink(
             icon = Icons.Filled.Notifications,
             title = "Permission center",
-            detail = "Phone, call log, notifications, notification access, battery",
+            detail = if (permissionSnapshot.allGranted) {
+                "All 5 grants in place — tap for details"
+            } else {
+                "${5 - permissionSnapshot.missingCount} of 5 granted — grant the rest one by one"
+            },
             onClick = onOpenPermissions,
         )
 
-        // ---------------- Event log ----------------
         SettingsLink(
             icon = Icons.Filled.List,
             title = "Event log",
@@ -272,7 +286,7 @@ private fun RootSettings(
             onClick = onOpenEventLog,
         )
 
-        // ---------------- Future sections ----------------
+        SectionHeader("Coming next")
         FutureCard(
             icon = Icons.Filled.Star,
             title = "Models",
@@ -286,6 +300,7 @@ private fun RootSettings(
             milestone = "M4",
         )
 
+        SectionHeader("About")
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
@@ -295,11 +310,10 @@ private fun RootSettings(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("About", style = MaterialTheme.typography.titleSmall)
                 Text(
                     "oneCR v${appInfo.versionName} (build ${appInfo.versionCode}, ${appInfo.buildType})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
                 )
                 Text(
                     text = "Project home: github.com/L-Malakar/oneCR",

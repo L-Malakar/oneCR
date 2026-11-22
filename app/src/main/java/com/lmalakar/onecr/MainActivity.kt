@@ -50,7 +50,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Returning from Shizuku / settings: refresh the bridge health right away.
-        (application as OneCRApplication).container.privilegeMonitor.refreshAsync()
+        val container = (application as OneCRApplication).container
+        // Returning from Shizuku / system permission screens: re-read the OS state
+        // and refresh the bridge health + notification center right away.
+        container.refreshPermissions()
+        container.notificationCenter.refresh()
+        container.resumeTick.intValue++
+        container.privilegeMonitor.refreshAsync()
     }
 }

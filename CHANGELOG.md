@@ -4,6 +4,66 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.2.2] — 2026-11-22
+
+UX release: **a professional shell for the app — top bar + notification center,
+one-by-one permission wizard.** Every screen now has a branded top app bar with a
+notification bell (top-right); the bell opens a notification center that collects
+everything the app needs, every error, and the activity log in one feed with an
+unread badge. Permissions are no longer bundled: each tap asks for exactly one
+thing.
+
+### Added
+- **Top app bar with notification center** (`:app`): a Material 3 `TopAppBar`
+  (logo + current tab + version) on all main screens; the bell in the top-right
+  shows an amber unread badge counting needs + errors + unseen activity, and
+  opens the new **Notifications** page. The center has three sections:
+  *Needs attention* (missing permissions with one-tap grant buttons, detection
+  off with a start button, bridge repair), *Errors* (the new error event stream),
+  and *Recent activity* (the event log as a feed). Opening it marks everything
+  read; "Mark read" resets the badge.
+- **Notification center model** (`:app/notify`): pure, unit-tested
+  `NotificationItems.build()` composes the feed from the permission snapshot,
+  bridge health, detection-running flag and event log; unread math
+  (needs + errors + activity after last-seen, errors never double-counted)
+  is pinned by 6 new unit tests. `NotificationCenter` combines the live flows;
+  `notification_last_seen` persisted via `AppSettingsStore`.
+- **One-by-one permission wizard** (`:feature:onboarding` + `:feature:settings`):
+  the onboarding Permissions step was rewritten — each permission is a card,
+  the active one is highlighted and its **Allow …** button fires exactly one
+  system dialog per tap, then the next card activates (phone → call log →
+  notifications (13+) → notification access → battery). The Permission center
+  gains the same experience as **Guided setup**: "Step X of Y" with the
+  rationale in front of every ask, per-item skip and exit.
+- **Permission snapshot** (`core/model`): new pure `PermissionSnapshot`
+  (phone / call log / notifications / listener / battery) published as a
+  `StateFlow` by the app module and refreshed on activity resume and after
+  every grant — replaces the old per-screen `refresh` counter hack, so every
+  screen (wizard, permission center, notification center) updates reactively.
+
+### Changed
+- **UI polish:** `SectionHeader` (uppercase label) groups the Dashboard
+  (Live status / Activity / Roadmap) and Settings (Appearance / Privilege
+  bridge / Permissions and diagnostics / Coming next / About); the Dashboard
+  hero carries a version chip and the Start/Stop buttons now reflect the real
+  service state via the new observable `DetectionEngine.running` StateFlow;
+  the nav bar and top bar are pinned to the theme surface color (the baseline
+  grey `surfaceContainer` clashed with the navy palette); `StatusCard` gained
+  semantic icon tones (PRIMARY / WARNING / NEUTRAL); roadmap icons no longer
+  imply pending items are problems.
+- **Error surface:** `EventLogEntry.KIND_ERROR` added; the detection service
+  logs errors when the engine is missing, `startForeground` fails (and stops
+  itself instead of being killed), or the engine throws — previously all of
+  these failed silently. The Event log renders error entries with an
+  error-colored badge; the notification center lists the last 10.
+
+### Fixed
+- Onboarding "Ready" step said "oneCR v0.2.0" regardless of the actual
+  version — now injected from `AppInfo`.
+- Event log list could collapse on small screens (`LazyColumn` now gets the
+  remaining height via `weight(1f)`).
+- Notification center badge math counts each error exactly once.
+
 ## [0.2.1] — 2026-11-22
 
 Polish release: **theme setting + low-end device support.** The app now follows

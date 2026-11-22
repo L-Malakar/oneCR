@@ -42,6 +42,7 @@ dependencies {
     api(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(project(":core:designsystem"))
+    implementation(project(":core:model"))
     implementation(project(":privilege:api"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

@@ -31,11 +31,20 @@ class AppSettingsStore(context: Context) {
         get() = ThemeMode.fromStorageKey(prefs.getString(KEY_THEME_MODE, null))
         set(value) = prefs.edit().putString(KEY_THEME_MODE, value.storageKey).apply()
 
+    /**
+     * Timestamp (epoch millis) the in-app notification center was last opened.
+     * Events newer than this count towards the top-bar unread badge (v0.2.2).
+     */
+    var notificationLastSeen: Long
+        get() = prefs.getLong(KEY_NOTIFICATION_LAST_SEEN, 0L)
+        set(value) = prefs.edit().putLong(KEY_NOTIFICATION_LAST_SEEN, value).apply()
+
     private companion object {
         const val KEY_ONBOARDING_DONE = "onboarding_completed"
         const val KEY_PRIVILEGE_MODE = "privilege_mode"
         const val KEY_DETECTION_AUTOSTART = "detection_autostart"
         const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_NOTIFICATION_LAST_SEEN = "notification_last_seen"
     }
 }
 

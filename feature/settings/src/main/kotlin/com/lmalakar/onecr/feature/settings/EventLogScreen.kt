@@ -86,7 +86,10 @@ fun EventLogScreen(
                 )
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 items(entries.asReversed()) { entry ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -124,17 +127,27 @@ private fun KindBadge(kind: String) {
         EventLogEntry.KIND_VOIP -> "voip"
         EventLogEntry.KIND_PRIVILEGE -> "bridge"
         EventLogEntry.KIND_SERVICE -> "service"
+        EventLogEntry.KIND_ERROR -> "error"
         else -> kind
     }
+    val isError = kind == EventLogEntry.KIND_ERROR
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
+        color = if (isError) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        },
     ) {
         Text(
             label,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = if (isError) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            },
             fontWeight = FontWeight.Bold,
         )
     }

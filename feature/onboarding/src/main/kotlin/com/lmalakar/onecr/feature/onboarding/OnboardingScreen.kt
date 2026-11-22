@@ -1,10 +1,8 @@
 package com.lmalakar.onecr.feature.onboarding
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -34,7 +32,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,10 +43,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
+import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.privilege.api.PrivilegeHealth
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.privilege.api.ShellCommandResult
@@ -95,25 +94,46 @@ private val OEM_GUIDANCE = listOf(
 )
 
 /**
- * The v0.2.0 setup wizard: welcome → device check → privilege bridge (Shizuku) →
- * OEM survival steps → permissions → done.
+ * One ask in the v0.2.2 one-by-one permission wizard: each button fires exactly
+ * one system dialog (or opens one settings page) per tap — nothing is requested
+ * silently and nothing is bundled together.
+ */
+private data class PermissionTask(
+    val id: String,
+    val title: String,
+    val description: String,
+    val icon: ImageVector,
+    val granted: Boolean,
+    val actionLabel: String,
+    val onAction: () -> Unit,
+)
+
+private enum class TaskState { DONE, ACTIVE, PENDING }
+
+/**
+ * The setup wizard: welcome → device check → privilege bridge (Shizuku) →
+ * OEM survival steps → permissions (one by one) → done.
  *
  * The bridge step is honestly optional: capture needs it (M3), detection does not.
  */
 @Composable
 fun OnboardingScreen(
     privilegeHealth: StateFlow<PrivilegeHealth>,
+    permissions: StateFlow<PermissionSnapshot>,
+    versionName: String,
     isShizukuInstalled: () -> Boolean,
     onInstallShizuku: () -> Unit,
     onOpenShizuku: () -> Unit,
     onRequestShizukuPermission: () -> Unit,
     onVerifyBridge: suspend () -> ShellCommandResult,
+    onRefreshPermissions: () -> Unit,
     onComplete: (autostartDetection: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     var autostart by rememberSaveable { mutableStateOf(true) }
     val health by privilegeHealth.collectAsState()
+    val permissionSnapshot by permissions.collectAsState()
 
     Column(
         modifier = modifier
@@ -149,8 +169,12 @@ fun OnboardingScreen(
                 onVerifyBridge = onVerifyBridge,
             )
             3 -> OemStep()
-            4 -> PermissionsStep()
-            5 -> DoneStep(autostart = autostart, onAutostartChange = { autostart = it })
+            4 -> PermissionsStep(permissionSnapshot, onRefreshPermissions)
+            5 -> DoneStep(
+                versionName = versionName,
+                autostart = autostart,
+                onAutostartChange = { autostart = it },
+            )
         }
 
         Row(
@@ -195,7 +219,6 @@ private fun WelcomeStep() {
 
 @Composable
 private fun DeviceStep() {
-    val context = LocalContext.current
     val sdk = Build.VERSION.SDK_INT
     val fullSupport = sdk >= 30
     StepScaffold(
@@ -305,7 +328,6 @@ private fun BridgeStep(
 
 @Composable
 private fun OemStep() {
-    val context = LocalContext.current
     val vendor = remember { Build.MANUFACTURER.lowercase() }
     val guidance = OEM_GUIDANCE.firstOrNull { entry -> entry.vendors.any { vendor.contains(it) } }
 
@@ -324,61 +346,115 @@ private fun OemStep() {
     }
 }
 
+// ---------------------------------------------------------------------
+// Permissions — the one-by-one wizard (v0.2.2)
+// ---------------------------------------------------------------------
+
 @Composable
-private fun PermissionsStep() {
+private fun PermissionsStep(snapshot: PermissionSnapshot, onRefreshPermissions: () -> Unit) {
     val context = LocalContext.current
-    var refresh by remember { mutableIntStateOf(0) }
+    val singleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { onRefreshPermissions() }
 
-    val runtimePermissions = buildList {
-        add(Manifest.permission.READ_PHONE_STATE)
-        add(Manifest.permission.READ_CALL_LOG)
-        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+    val tasks = buildList {
+        add(
+            PermissionTask(
+                id = "phone",
+                title = "Phone state",
+                description = "See when cellular calls start and end so oneCR can follow them.",
+                icon = Icons.Filled.Phone,
+                granted = snapshot.phoneGranted,
+                actionLabel = "Allow phone access",
+                onAction = { singleLauncher.launch(Manifest.permission.READ_PHONE_STATE) },
+            ),
+        )
+        add(
+            PermissionTask(
+                id = "call_log",
+                title = "Call log",
+                description = "Resolve the number and contact name after a call ends — read locally, never uploaded.",
+                icon = Icons.Filled.Phone,
+                granted = snapshot.callLogGranted,
+                actionLabel = "Allow call log access",
+                onAction = { singleLauncher.launch(Manifest.permission.READ_CALL_LOG) },
+            ),
+        )
+        if (Build.VERSION.SDK_INT >= 33) {
+            add(
+                PermissionTask(
+                    id = "notifications",
+                    title = "Notifications",
+                    description = "Keep the detection service's low-priority notification visible (Android 13+).",
+                    icon = Icons.Filled.Notifications,
+                    granted = snapshot.notificationsGranted,
+                    actionLabel = "Allow notifications",
+                    onAction = { singleLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                ),
+            )
+        }
+        add(
+            PermissionTask(
+                id = "listener",
+                title = "Notification access",
+                description = "Detect ongoing WhatsApp/VoIP calls — reads only the category flag of allowlisted apps, never the text.",
+                icon = Icons.Filled.Notifications,
+                granted = snapshot.notificationListenerEnabled,
+                actionLabel = "Open notification access settings",
+                onAction = {
+                    runCatching {
+                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    }
+                },
+            ),
+        )
+        add(
+            PermissionTask(
+                id = "battery",
+                title = "Battery optimization",
+                description = "Exempt oneCR so OEM battery savers don't pause detection mid-call.",
+                icon = Icons.Filled.Settings,
+                granted = snapshot.batteryExempt,
+                actionLabel = "Exempt from battery optimization",
+                onAction = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                android.net.Uri.parse("package:${context.packageName}"),
+                            ),
+                        )
+                    }
+                },
+            ),
+        )
     }
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { refresh++ }
 
-    val phoneOk = context.isGranted(Manifest.permission.READ_PHONE_STATE, refresh)
-    val callLogOk = context.isGranted(Manifest.permission.READ_CALL_LOG, refresh)
-    val notifOk = Build.VERSION.SDK_INT < 33 ||
-        context.isGranted(Manifest.permission.POST_NOTIFICATIONS, refresh)
-    val listenerOk = notificationListenerEnabled(context, refresh)
-    val batteryOk = batteryIgnored(context, refresh)
+    val activeIndex = tasks.indexOfFirst { !it.granted }
 
     StepScaffold(
         icon = Icons.Filled.Phone,
-        title = "Permissions",
-        subtitle = "Everything is optional — features degrade, nothing breaks.",
+        title = "Permissions — one at a time",
+        subtitle = if (activeIndex == -1) {
+            "All set — every permission granted."
+        } else {
+            "${tasks.count { it.granted }} of ${tasks.size} granted. Tap the highlighted button, answer it, then the next."
+        },
     ) {
-        Bullet(good = phoneOk, text = "Phone state (READ_PHONE_STATE) — cellular call detection.")
-        Bullet(good = callLogOk, text = "Call log (READ_CALL_LOG) — resolve numbers and contact names after calls.")
-        Bullet(good = notifOk, text = "Notifications (POST_NOTIFICATIONS) — keep the detection service visible.")
-        Bullet(good = listenerOk, text = "Notification access — VoIP call detection (WhatsApp etc.).")
-        Bullet(good = batteryOk, text = "Battery optimization exemption — survive OEM battery savers.")
-
-        Button(onClick = { launcher.launch(runtimePermissions.toTypedArray()) }) {
-            Text("Grant phone, call log and notification permissions")
+        tasks.forEachIndexed { index, task ->
+            val state = when {
+                task.granted -> TaskState.DONE
+                index == activeIndex -> TaskState.ACTIVE
+                else -> TaskState.PENDING
+            }
+            TaskCard(task, state)
         }
-        OutlinedButton(onClick = {
-            runCatching {
-                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            }
-            refresh++
-        }) { Text("Notification access settings") }
-        OutlinedButton(onClick = {
-            runCatching {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        android.net.Uri.parse("package:${context.packageName}"),
-                    ),
-                )
-            }
-            refresh++
-        }) { Text("Exempt from battery optimization") }
 
         Text(
-            "Notification access reads only the category flag of allowlisted VoIP apps — never notification text. See PRIVACY.md.",
+            "Each button asks for exactly one thing — one system dialog per tap, nothing " +
+                "requested silently. Skipping is fine: features degrade, nothing breaks, and " +
+                "you can grant later in Settings → Permission center. Notification access reads " +
+                "only the category flag of allowlisted VoIP apps — never notification text. See PRIVACY.md.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -386,14 +462,84 @@ private fun PermissionsStep() {
 }
 
 @Composable
-private fun DoneStep(autostart: Boolean, onAutostartChange: (Boolean) -> Unit) {
+private fun TaskCard(task: PermissionTask, state: TaskState) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (state == TaskState.PENDING) 0.65f else 1f),
+        shape = RoundedCornerShape(12.dp),
+        color = if (state == TaskState.ACTIVE) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        border = if (state == TaskState.ACTIVE) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        },
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = when (state) {
+                    TaskState.DONE -> Icons.Filled.CheckCircle
+                    else -> task.icon
+                },
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = when (state) {
+                    TaskState.DONE -> MaterialTheme.colorScheme.primary
+                    TaskState.ACTIVE -> MaterialTheme.colorScheme.onPrimaryContainer
+                    TaskState.PENDING -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = task.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                when (state) {
+                    TaskState.DONE -> Text(
+                        "Granted",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    TaskState.ACTIVE -> Button(
+                        onClick = task.onAction,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) { Text(task.actionLabel) }
+                    TaskState.PENDING -> Text(
+                        "Up next",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DoneStep(versionName: String, autostart: Boolean, onAutostartChange: (Boolean) -> Unit) {
     StepScaffold(
         icon = Icons.Filled.CheckCircle,
         title = "Ready",
-        subtitle = "oneCR v0.2.0 — detection is on the menu, capture is next.",
+        subtitle = "oneCR v$versionName — detection is on the menu, capture is next.",
     ) {
         Bullet("Dashboard shows live call detection and the bridge status.")
-        Bullet("Settings → Permission center re-runs any step you skipped.")
+        Bullet("The bell in the top bar collects anything the app needs, errors and activity in one place.")
+        Bullet("Settings → Permission center re-runs the one-by-one grants any time.")
         Bullet("Settings → Event log shows every detection event with timestamps.")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -415,7 +561,7 @@ private fun DoneStep(autostart: Boolean, onAutostartChange: (Boolean) -> Unit) {
 
 @Composable
 private fun StepScaffold(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     content: @Composable () -> Unit,
@@ -474,20 +620,4 @@ private fun Bullet(text: String, good: Boolean? = null) {
         )
         Text(text, style = MaterialTheme.typography.bodyMedium)
     }
-}
-
-private fun Context.isGranted(permission: String, refreshKey: Int): Boolean =
-    ContextCompat.checkSelfPermission(this, permission) ==
-        android.content.pm.PackageManager.PERMISSION_GRANTED
-
-private fun notificationListenerEnabled(context: Context, refreshKey: Int): Boolean =
-    runCatching {
-        Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-            ?.split(':')
-            ?.any { it.startsWith(context.packageName) }
-    }.getOrDefault(false) == true
-
-private fun batteryIgnored(context: Context, refreshKey: Int): Boolean {
-    val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
-    return pm.isIgnoringBatteryOptimizations(context.packageName)
 }

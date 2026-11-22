@@ -22,11 +22,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.AppContainer
 import com.lmalakar.onecr.R
+import com.lmalakar.onecr.core.designsystem.component.SectionHeader
 import com.lmalakar.onecr.core.designsystem.component.StatusCard
+import com.lmalakar.onecr.core.designsystem.component.StatusTone
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
@@ -56,9 +60,15 @@ private val MILESTONES = listOf(
     MilestoneRow("M5", "On-device AI (whisper.cpp + llama.cpp)", done = false),
 )
 
+/**
+ * The v0.2.2 dashboard: branded hero, a live-status section whose Start/Stop
+ * buttons reflect the real service state, an activity card that opens the
+ * notification center, and the roadmap.
+ */
 @Composable
 fun DashboardScreen(
     container: AppContainer,
+    onOpenNotifications: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val appInfo = container.appInfo
@@ -67,14 +77,26 @@ fun DashboardScreen(
     val callState by container.detection.callState.collectAsState()
     val capabilities by container.detection.capabilities.collectAsState()
     val recentEvents by container.detection.recentEvents.collectAsState()
+    val running by container.detection.running.collectAsState()
+
+    fun startDetection() {
+        runCatching {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, CallDetectionService::class.java)
+                    .setAction(DetectionContract.ACTION_START),
+            )
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 24.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // ---------------- Hero ----------------
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -83,11 +105,11 @@ fun DashboardScreen(
                 painter = painterResource(R.drawable.ic_brand_logo),
                 contentDescription = "oneCR logo",
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp)),
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp)),
             )
             Spacer(modifier = Modifier.size(14.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "oneCR",
                     style = MaterialTheme.typography.headlineMedium,
@@ -99,44 +121,65 @@ fun DashboardScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Text(
+                    text = "v${appInfo.versionName}",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
-        Text(
-            text = "v${appInfo.versionName} (${appInfo.buildType}) — detection build. " +
-                "Nothing leaves this device.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
 
-        // ---------------- Live call detection ----------------
+        SectionHeader("Live status")
+
         StatusCard(
-            title = "Call detection (live)",
-            value = describeCallState(callState),
-            supportingText = detectionCapabilityText(capabilities),
+            title = "Call detection",
+            value = if (running) describeCallState(callState) else "Off",
+            supportingText = if (running) {
+                detectionCapabilityText(capabilities)
+            } else {
+                "Not watching for calls — start detection below."
+            },
             icon = Icons.Filled.Call,
-            badge = "M2",
+            badge = if (running) "LIVE" else "OFF",
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = {
-                runCatching {
-                    ContextCompat.startForegroundService(
-                        context,
-                        Intent(context, CallDetectionService::class.java)
-                            .setAction(DetectionContract.ACTION_START),
-                    )
-                }
-            }) { Text("Start detection") }
-            OutlinedButton(onClick = {
-                runCatching {
-                    context.startService(
-                        Intent(context, CallDetectionService::class.java)
-                            .setAction(DetectionContract.ACTION_STOP),
-                    )
-                }
-            }) { Text("Stop") }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (running) {
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startService(
+                                Intent(context, CallDetectionService::class.java)
+                                    .setAction(DetectionContract.ACTION_STOP),
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Stop detection") }
+            } else {
+                Button(
+                    onClick = { startDetection() },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Start detection") }
+            }
+            OutlinedButton(
+                onClick = { container.privilegeMonitor.refreshAsync() },
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.size(6.dp))
+                Text("Re-check bridge")
+            }
         }
 
-        // ---------------- Privilege bridge ----------------
         StatusCard(
             title = "Privilege bridge",
             value = when (health.state) {
@@ -148,10 +191,11 @@ fun DashboardScreen(
             },
             supportingText = health.detail,
             icon = if (health.state == PrivilegeState.OK) Icons.Filled.Lock else Icons.Filled.Warning,
-            badge = "M2",
+            iconTone = if (health.state == PrivilegeState.OK) StatusTone.PRIMARY else StatusTone.WARNING,
         )
 
-        // ---------------- Recent events ----------------
+        SectionHeader("Activity")
+
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -161,11 +205,15 @@ fun DashboardScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    "Recent events",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Recent events",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onOpenNotifications) { Text("View all") }
+                }
                 if (recentEvents.isEmpty()) {
                     Text(
                         "Nothing yet — start detection, then make a call. Full log: Settings → Event log.",
@@ -173,7 +221,7 @@ fun DashboardScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    recentEvents.takeLast(5).forEach { entry ->
+                    recentEvents.takeLast(3).forEach { entry ->
                         Text(
                             text = "• ${entry.kind}: ${entry.message}",
                             style = MaterialTheme.typography.bodySmall,
@@ -184,13 +232,15 @@ fun DashboardScreen(
             }
         }
 
-        // ---------------- Future milestones ----------------
+        SectionHeader("Roadmap")
+
         StatusCard(
             title = "Recording engine",
             value = "Next milestone",
             supportingText = "Shell-privilege capture (cellular) and playback-capture mix (VoIP) arrive in M3 — this bridge is what they will use.",
             icon = Icons.Filled.Call,
             badge = "M3",
+            iconTone = StatusTone.NEUTRAL,
         )
         StatusCard(
             title = "Library",
@@ -198,6 +248,7 @@ fun DashboardScreen(
             supportingText = "Storage, playback, full-text search and export arrive in M4.",
             icon = Icons.Filled.PlayArrow,
             badge = "M4",
+            iconTone = StatusTone.NEUTRAL,
         )
         StatusCard(
             title = "AI models",
@@ -205,6 +256,7 @@ fun DashboardScreen(
             supportingText = "whisper.cpp transcription and llama.cpp summaries arrive in M5, fully on-device.",
             icon = Icons.Filled.Star,
             badge = "M5",
+            iconTone = StatusTone.NEUTRAL,
         )
 
         Surface(
@@ -217,14 +269,14 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = "Roadmap",
+                    text = "Milestones",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                 )
                 MILESTONES.forEach { row ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (row.done) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                            imageVector = if (row.done) Icons.Filled.CheckCircle else Icons.Filled.Star,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                             tint = if (row.done) {
@@ -248,11 +300,12 @@ fun DashboardScreen(
             }
         }
 
-        OutlinedButton(onClick = { container.privilegeMonitor.refreshAsync() }) {
-            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.size(6.dp))
-            Text("Re-check bridge")
-        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "v${appInfo.versionName} (${appInfo.buildType}) — detection build. Nothing leaves this device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

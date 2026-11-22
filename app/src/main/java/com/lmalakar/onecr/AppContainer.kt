@@ -4,7 +4,9 @@ import android.app.Application
 import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.lmalakar.onecr.core.common.DefaultDispatchersProvider
 import com.lmalakar.onecr.core.common.DispatchersProvider
 import com.lmalakar.onecr.core.common.Logger
@@ -13,6 +15,8 @@ import com.lmalakar.onecr.core.model.AppInfo
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.AppSettingsStore
 import com.lmalakar.onecr.data.files.EventLogStore
+import com.lmalakar.onecr.notify.NotificationCenter
+import com.lmalakar.onecr.notify.PermissionReader
 import com.lmalakar.onecr.privilege.api.BootCountStore
 import com.lmalakar.onecr.privilege.api.PrivilegeHealthMonitor
 import com.lmalakar.onecr.privilege.api.PrivilegeProvider
@@ -47,6 +51,8 @@ private class PrefsBootCountStore(context: Context) : BootCountStore {
  * repositories in M3/M4, engines in M5); swap for Hilt when the graph gets heavy.
  */
 class AppContainer(appContext: Context) {
+
+    private val appContext = appContext
 
     val appInfo: AppInfo = AppInfo(
         versionName = BuildConfig.VERSION_NAME,
@@ -97,6 +103,30 @@ class AppContainer(appContext: Context) {
     fun setThemeMode(mode: ThemeMode) {
         settings.themeMode = mode
         themeMode.value = mode
+    }
+
+    // ---- Notification center (v0.2.2) ----
+
+    /** Live permission snapshot; republished on resume and after every grant action. */
+    val permissions = MutableStateFlow(PermissionReader.read(appContext))
+
+    /** Bumped from MainActivity.onResume — screens can key recomposition off it. */
+    val resumeTick = mutableIntStateOf(0)
+
+    /** The v0.2.2 notification center: needs + errors + activity in one feed. */
+    val notificationCenter = NotificationCenter(
+        settings = settings,
+        health = privilegeMonitor.health,
+        events = detection.recentEvents,
+        permissions = permissions,
+        running = detection.running,
+        showBridge = { settings.privilegeMode != null },
+        scope = appScope,
+    )
+
+    /** Re-read the OS permission state (call after grants and on resume). */
+    fun refreshPermissions() {
+        permissions.value = PermissionReader.read(appContext)
     }
 
     init {
