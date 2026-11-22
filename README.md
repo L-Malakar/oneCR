@@ -8,6 +8,17 @@
 
 Your calls never leave your phone. No accounts, no cloud, no telemetry — just a clean recording library with local whisper.cpp transcription and llama.cpp summaries.
 
+<!-- Download button: on every release, bump the version in the link AND in the button label. -->
+<p>
+  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.0/oneCR-v0.2.0.apk">
+    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.0%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.0 APK"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/L-Malakar/oneCR/releases">
+    <img src="https://img.shields.io/badge/All%20releases-24292e?style=for-the-badge&logo=github&logoColor=white" alt="All oneCR releases"/>
+  </a>
+</p>
+
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28arm64%29-green)](README.md)
@@ -71,9 +82,10 @@ Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/r
 1. **Android 8.0 or newer is required to install** (API 26+). The capture features that ship from M2 onward need **Android 11+** — the app checks that at runtime and shows a clear message, instead of refusing to install.
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
-4. **Updating from the v0.1.2 pre-release:** v0.2.0 was signed with a fresh release keystore (the original was lost with the build machine), so Android will refuse an in-place update once — **uninstall v0.1.2 first, then install v0.2.0**. If you still have the `.signing/` folder from the v0.1.2 source zip, build v0.2.0 yourself with it (`build.bat` picks it up automatically) and the update installs in place instead. From v0.2.0 onward the shipped keystore stays stable.
-5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.0.apk SHA256` on Windows). A truncated download is the most common cause of that error.
-6. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning.
+4. **Play Protect may stop the install with "This app can request access to sensitive data."** That warning is automatic for *any* sideloaded app that requests Call Log / Phone permissions — it is a heuristic caution, not a malware verdict (the code is public in this repo and each release lists its SHA-256). Tap **More details → Install anyway (unsafe)** to continue. To stop the prompts for good: Play Store → profile icon → **Play Protect** → ⚙ **Settings** → turn off **Scan apps with Play Protect** (and **Require Play Protect review for apps** on Android 15+). It cannot be avoided in code — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md#play-protect-and-sideloading).
+5. **Updating from the v0.1.2 pre-release:** v0.2.0 was signed with a fresh release keystore (the original was lost with the build machine), so Android will refuse an in-place update once — **uninstall v0.1.2 first, then install v0.2.0**. If you still have the `.signing/` folder from the v0.1.2 source zip, build v0.2.0 yourself with it (`build.bat` picks it up automatically) and the update installs in place instead. From v0.2.0 onward the shipped keystore stays stable.
+6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.0.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+7. Some OEM ROMs (MIUI/ColorOS) also block sideloads under "Install via USB" — approve the install when prompted, or enable that toggle in Developer options.
 
 ## Project structure
 
