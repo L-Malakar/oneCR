@@ -169,18 +169,22 @@ object NotificationItems {
                 }
 
             // ---- Activity log ----------------------------------------------------
-            events.takeLast(MAX_LOGS).asReversed().forEach { entry ->
-                add(
-                    NotificationItem(
-                        id = "log.${entry.timestampMillis}.${entry.kind}",
-                        severity = NotificationSeverity.LOG,
-                        title = entry.message,
-                        message = entry.message,
-                        kind = entry.kind,
-                        timestampMillis = entry.timestampMillis,
-                    ),
-                )
-            }
+            // Errors already surface in their own section above; keeping them in
+            // the activity feed as well made every error appear twice (v0.2.3 fix).
+            events.takeLast(MAX_LOGS).asReversed()
+                .filter { it.kind != EventLogEntry.KIND_ERROR }
+                .forEach { entry ->
+                    add(
+                        NotificationItem(
+                            id = "log.${entry.timestampMillis}.${entry.kind}",
+                            severity = NotificationSeverity.LOG,
+                            title = entry.message,
+                            message = entry.message,
+                            kind = entry.kind,
+                            timestampMillis = entry.timestampMillis,
+                        ),
+                    )
+                }
         }
 
         // Unread activity = non-error events recorded after the last open; error

@@ -174,4 +174,25 @@ class NotificationItemsTest {
         assertEquals(listOf("New", "Old"), model.logs.map { it.title })
         assertFalse(model.isEmpty)
     }
+
+    @Test
+    fun `error events appear once - not duplicated in the activity feed`() {
+        val model = NotificationItems.build(
+            permissions = allGranted,
+            bridgeState = PrivilegeState.OK,
+            bridgeDetail = "",
+            bridgeConfigured = true,
+            detectionRunning = true,
+            events = listOf(
+                EventLogEntry(100, EventLogEntry.KIND_ERROR, "boom"),
+                EventLogEntry(150, EventLogEntry.KIND_CALL, "Call"),
+            ),
+            lastSeenMillis = 0,
+            nowMillis = 300,
+        )
+        // Errors live in their own section (v0.2.3 dedupe fix)…
+        assertEquals(listOf("boom"), model.errors.map { it.message })
+        // …and the activity feed carries only the non-error event.
+        assertEquals(listOf("Call"), model.logs.map { it.title })
+    }
 }

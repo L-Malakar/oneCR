@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -79,6 +80,12 @@ fun PermissionCenterScreen(
     val snapshot by permissions.collectAsState()
     var mode by rememberSaveable { mutableStateOf(Mode.LIST) }
     var skipCount by remember { mutableIntStateOf(0) }
+
+    // System back: inside the guided flow return to the overview first, then
+    // to the settings root (v0.2.3).
+    BackHandler {
+        if (mode == Mode.GUIDED) mode = Mode.LIST else onBack()
+    }
 
     val singleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),

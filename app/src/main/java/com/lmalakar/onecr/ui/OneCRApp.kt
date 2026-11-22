@@ -1,5 +1,11 @@
 package com.lmalakar.onecr.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.SystemClock
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,13 +35,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -45,6 +52,7 @@ import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.AppContainer
 import com.lmalakar.onecr.R
 import com.lmalakar.onecr.core.designsystem.theme.AmberAccent
+import com.lmalakar.onecr.core.designsystem.theme.BadgeInk
 import com.lmalakar.onecr.feature.library.LibraryScreen
 import com.lmalakar.onecr.feature.onboarding.OnboardingScreen
 import com.lmalakar.onecr.feature.settings.SettingsScreen
@@ -61,10 +69,27 @@ private enum class TopLevelTab(val label: String, val icon: ImageVector) {
     SETTINGS("Settings", Icons.Filled.Settings),
 }
 
+/** Second back press within this window confirms the exit (v0.2.3). */
+private const val EXIT_CONFIRM_WINDOW_MS = 2_200L
+
+/** Walk up the context wrappers to the hosting Activity (for a controlled exit). */
+private tailrec fun Context.findHostActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findHostActivity()
+    else -> null
+}
+
 /**
- * v0.2.2 shell: branded top app bar (logo + tab + version) with a notification
+ * v0.2.3 shell: branded top app bar (logo + tab + version) with a notification
  * bell on the top-right; the bell opens the notification center — one place for
  * everything the app needs, its errors and its activity log.
+ *
+ * Back navigation (v0.2.3): system back now walks the user back through the
+ * screens they visited instead of killing the app. Sub-screens (notification
+ * center, settings pages, onboarding steps) intercept back first via their own
+ * BackHandlers; the shell then pops the visited-tab history, and only when no
+ * history is left does it ask for a second press within a short window before
+ * finishing the activity.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +101,20 @@ fun OneCRApp(container: AppContainer) {
     var showNotificationCenter by rememberSaveable { mutableStateOf(false) }
     val notificationModel by container.notificationCenter.model.collectAsState()
 
+    // Visited-tab history (most recent last, never contains the current tab).
+    var tabHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var selectedTabName by rememberSaveable { mutableStateOf(TopLevelTab.DASHBOARD.name) }
+    // valueOf is guarded so an older persisted name can never crash a new build.
+    val currentTab = runCatching { TopLevelTab.valueOf(selectedTabName) }
+        .getOrDefault(TopLevelTab.DASHBOARD)
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+
+    fun openTab(tab: TopLevelTab) {
+        if (tab.name == selectedTabName) return
+        tabHistory = (tabHistory + selectedTabName).distinct()
+        selectedTabName = tab.name
+    }
+
     fun startDetectionService() {
         runCatching {
             ContextCompat.startForegroundService(
@@ -83,6 +122,31 @@ fun OneCRApp(container: AppContainer) {
                 android.content.Intent(context, CallDetectionService::class.java)
                     .setAction(DetectionContract.ACTION_START),
             )
+        }
+    }
+
+    // Shell-level back handling — sub-screens register their own BackHandler
+    // later in the composition, so they intercept first when composed.
+    BackHandler {
+        when {
+            showNotificationCenter -> showNotificationCenter = false
+
+            tabHistory.isNotEmpty() -> {
+                selectedTabName = tabHistory.last()
+                tabHistory = tabHistory.dropLast(1)
+            }
+
+            currentTab != TopLevelTab.DASHBOARD -> selectedTabName = TopLevelTab.DASHBOARD.name
+
+            else -> {
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastBackAt < EXIT_CONFIRM_WINDOW_MS) {
+                    context.findHostActivity()?.finish()
+                } else {
+                    lastBackAt = now
+                    Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -114,8 +178,6 @@ fun OneCRApp(container: AppContainer) {
         return
     }
 
-    var selectedTabName by rememberSaveable { mutableStateOf(TopLevelTab.DASHBOARD.name) }
-    val currentTab = TopLevelTab.valueOf(selectedTabName)
     val badgeCount = notificationModel.badgeCount
 
     // Opening the center clears the unread badge immediately; the items stay
@@ -162,7 +224,7 @@ fun OneCRApp(container: AppContainer) {
                                     Badge(containerColor = AmberAccent) {
                                         Text(
                                             text = if (badgeCount > 9) "9+" else badgeCount.toString(),
-                                            color = Color(0xFF14181F),
+                                            color = BadgeInk,
                                         )
                                     }
                                 }
@@ -192,7 +254,7 @@ fun OneCRApp(container: AppContainer) {
                 TopLevelTab.entries.forEach { tab ->
                     NavigationBarItem(
                         selected = tab == currentTab,
-                        onClick = { selectedTabName = tab.name },
+                        onClick = { openTab(tab) },
                         icon = { Icon(imageVector = tab.icon, contentDescription = tab.label) },
                         label = { Text(text = tab.label) },
                     )
@@ -214,6 +276,7 @@ fun OneCRApp(container: AppContainer) {
             TopLevelTab.SETTINGS ->
                 SettingsScreen(
                     appInfo = container.appInfo,
+                    logoRes = R.drawable.ic_brand_logo,
                     privilegeHealth = container.privilegeMonitor.health,
                     recentEvents = container.detection.recentEvents,
                     permissions = container.permissions,

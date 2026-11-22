@@ -27,6 +27,18 @@ Status legend: [ ] planned, [~] in progress, [x] done.
 - [ ] `:priv-adb`: wireless-debugging pairing protocol + local adb client — **moved to M2.5 (v0.3.0)**, shipped after the Shizuku path is field-proven
 - [ ] Exit criteria: reliable labeled call events on the test device; graceful degradation when privileges drop (needs owner device testing)
 
+## M2.x — App shell polish (v0.2.1–v0.2.3)
+- [x] Light / Dark / System theme with persisted choice, SYSTEM default (v0.2.1)
+- [x] Low-end device accommodations: health-ping interval doubled on low-RAM devices, Android 8.0 install floor kept (v0.2.1)
+- [x] Branded top app bar + notification bell, in-app notification center (needs / errors / activity, unread badge) (v0.2.2)
+- [x] One-by-one permission wizard in onboarding + guided setup in Permission center (v0.2.2)
+- [x] Back navigation: visited-tab history, back intercepts in notification center / settings sub-pages / onboarding, double-press exit confirmation (v0.2.3)
+- [x] Full Material 3 color mapping in dark & light (no baseline fallbacks), themed window background, themed warning tone (v0.2.3)
+- [x] Redesigned About section: gradient brand header, facts rows, setup shortcut (v0.2.3)
+- [x] Feed fixes: errors no longer duplicated in activity; dashboard events newest-first; new unit test (v0.2.3)
+- [x] CI green: gradlew exec-bit fix (exit 126), run concurrency, release-notes fallback (v0.2.3)
+- [ ] Verified on a real device (owner)
+
 ## M2.5 — Embedded ADB bridge (v0.3.0)
 - [ ] Wireless-debugging pairing protocol (TLS + 6-digit code) on-device
 - [ ] Local adb client: connect to own adbd, spawn capture dex via `app_process`

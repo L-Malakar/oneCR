@@ -1,7 +1,6 @@
 package com.lmalakar.onecr.feature.settings
 
-import android.content.Intent
-import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,7 +40,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
@@ -66,6 +64,7 @@ private enum class SettingsPage { ROOT, PERMISSIONS, EVENT_LOG }
 @Composable
 fun SettingsScreen(
     appInfo: AppInfo,
+    logoRes: Int,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
     permissions: StateFlow<PermissionSnapshot>,
@@ -82,9 +81,14 @@ fun SettingsScreen(
 ) {
     var page by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
 
+    // System back returns from the sub-pages to the settings root instead of
+    // leaving the app (v0.2.3).
+    BackHandler(enabled = page != SettingsPage.ROOT) { page = SettingsPage.ROOT }
+
     when (page) {
         SettingsPage.ROOT -> RootSettings(
             appInfo = appInfo,
+            logoRes = logoRes,
             privilegeHealth = privilegeHealth,
             recentEvents = recentEvents,
             permissions = permissions,
@@ -123,6 +127,7 @@ fun SettingsScreen(
 @Composable
 private fun RootSettings(
     appInfo: AppInfo,
+    logoRes: Int,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
     permissions: StateFlow<PermissionSnapshot>,
@@ -137,7 +142,6 @@ private fun RootSettings(
     onOpenEventLog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val health by privilegeHealth.collectAsState()
     val events by recentEvents.collectAsState()
     val permissionSnapshot by permissions.collectAsState()
@@ -301,45 +305,11 @@ private fun RootSettings(
         )
 
         SectionHeader("About")
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    "oneCR v${appInfo.versionName} (build ${appInfo.versionCode}, ${appInfo.buildType})",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "Project home: github.com/L-Malakar/oneCR",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/L-Malakar/oneCR")),
-                            )
-                        }
-                    },
-                )
-                Text(
-                    text = "Privacy: nothing leaves this device. See PRIVACY.md in the repository.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "License: MIT. Recording laws vary by region — use lawfully and inform call participants.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onRerunOnboarding) { Text("Re-run the setup wizard") }
-            }
-        }
+        AboutSection(
+            appInfo = appInfo,
+            logoRes = logoRes,
+            onRerunOnboarding = onRerunOnboarding,
+        )
     }
 }
 

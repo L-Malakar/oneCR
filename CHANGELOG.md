@@ -4,6 +4,56 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.2.3] — 2026-11-22
+
+Polish release: **back navigation that behaves, a fixed dark theme, a
+redesigned About screen and green CI.** System back now walks the user's
+screen history (notification center → opener, settings sub-pages → root,
+previous tab) and only exits after a second press at the root confirms it.
+The Material 3 scheme maps every color role in both modes, so dialogs, menus,
+switches and text fields finally match the navy palette in dark mode.
+
+### Added
+- **Back navigation with exit confirmation** (`:app`, `:feature:*`): a shell
+  `BackHandler` coordinates a visited-tab history (`Dashboard ⇄ Library ⇄
+  Settings`), the notification center and the onboarding wizard intercept back
+  first via their own handlers, and the exit needs a second press within
+  ~2.2 s ("Press back again to exit"). Sub-pages return to the settings root;
+  the guided permission flow returns to its overview first. Tab history is
+  `rememberSaveable`, so it survives process death; a persisted-but-renamed
+  tab name now falls back to Dashboard instead of crashing.
+- **Complete Material 3 color scheme** (`:core:designsystem`): both
+  `darkColorScheme` and `lightColorScheme` now map every role — tertiary,
+  errorContainer/onErrorContainer, outline/outlineVariant, inverse*,
+  surfaceTint, scrim and all `surfaceContainer*` elevations. The dark
+  `secondary` is a light slate (the old value was near-black on navy), light
+  `primary` is a deeper teal for AA-contrast buttons, the warning tone uses a
+  themed amber container pair, and the badge ink is a named token.
+- **Themed window background** (`:app` res): `values`/`values-night`
+  `onecr_window_background` colors remove the grey launch flash before the
+  first Compose frame.
+- **Redesigned About section** (`:feature:settings`): gradient brand header
+  (logo, tagline, version/build chips), icon rows for Project home (deep-links
+  to GitHub), Privacy by design, License and exact build, plus a setup-wizard
+  button — all scheme-driven, no hardcoded colors.
+- **CI fixes** (`.github/workflows/android.yml`): `chmod +x gradlew` after
+  checkout in both jobs (Windows checkouts lose the exec bit → every Linux
+  build failed with exit code 126 `Permission denied`), a concurrency group
+  that cancels superseded runs, and a release-notes fallback so tagging without
+  a notes file can no longer fail the publish step. `gradlew` ships with mode
+  755 in the source archive; CONTRIBUTING.md documents the permanent
+  `git update-index --chmod=+x gradlew` fix.
+
+### Fixed
+- **Notification center showed every error twice** — once under *Errors* and
+  again under *Recent activity*. The activity feed now excludes error events;
+  pinned by a new unit test (7 notification tests total).
+- **Dashboard "Recent events" order** — the three latest events listed
+  oldest-first; now newest-first like every other feed.
+- Hardcoded `Color(0xFF14181F)` badge text and amber warning icon moved into
+  the theme (`BadgeInk`, `tertiaryContainer`); dead imports and an unused
+  local removed in `SettingsScreen`/`OneCRApp`.
+
 ## [0.2.2] — 2026-11-22
 
 UX release: **a professional shell for the app — top bar + notification center,

@@ -30,6 +30,21 @@ Conventional-commits style, e.g. `feat(recorder): ...`, `fix(build): ...`, `docs
 3. CI must pass (`assembleDebug`, `assembleRelease`, `test`).
 4. Describe device testing you performed (model, Android version, what you verified) — audio behavior is device-specific, so this matters.
 
+## CI troubleshooting
+
+**Every Linux build fails with exit code 126 (`./gradlew: Permission denied`)?**
+That means `gradlew` lost its executable bit — it happens when the repo is
+pushed from Windows, where git does not preserve file modes. Two fixes:
+
+- **Permanent (do this once):** `git update-index --chmod=+x gradlew` then
+  commit and push. Verify with `git ls-files -s gradlew` — the mode must be
+  `100755`, not `100644`.
+- **Belt-and-braces:** the workflow already runs `chmod +x gradlew` before
+  every build, so CI recovers even if the bit is lost again.
+
+The same applies to `gradlew.bat` logic on Windows — that file does not need an
+exec bit, but keep both scripts in sync with upstream Gradle wrapper updates.
+
 ## Reporting bugs
 
 Open an issue using the bug template and include: device model, Android version, whether you used embedded-ADB or Shizuku mode, and a logcat capture around the failure (`adb logcat -s oneCR`).

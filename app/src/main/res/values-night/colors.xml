@@ -1,0 +1,4 @@
+<resources>
+    <!-- Night variant: same resource, navy background. -->
+    <color name="onecr_window_background">#0B1220</color>
+</resources>

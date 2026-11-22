@@ -221,7 +221,9 @@ fun DashboardScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    recentEvents.takeLast(3).forEach { entry ->
+                    // Newest first — the store is oldest-first, so the most recent
+                    // event belongs on top (v0.2.3 fix).
+                    recentEvents.takeLast(3).asReversed().forEach { entry ->
                         Text(
                             text = "• ${entry.kind}: ${entry.message}",
                             style = MaterialTheme.typography.bodySmall,

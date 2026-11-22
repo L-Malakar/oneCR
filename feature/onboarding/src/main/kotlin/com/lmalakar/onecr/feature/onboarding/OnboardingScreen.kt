@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -134,6 +135,10 @@ fun OnboardingScreen(
     var autostart by rememberSaveable { mutableStateOf(true) }
     val health by privilegeHealth.collectAsState()
     val permissionSnapshot by permissions.collectAsState()
+
+    // System back walks the wizard backwards; at the first step the shell's
+    // double-back-to-exit confirmation takes over (v0.2.3).
+    BackHandler(enabled = step > 0) { step-- }
 
     Column(
         modifier = modifier

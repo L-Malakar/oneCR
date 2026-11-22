@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Cancel superseded runs on the same branch — saves minutes on every push.
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build and test
@@ -13,6 +18,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # gradlew must carry the executable bit in git (100755). Repos pushed from
+      # Windows often lose it, and the runner then fails every build with
+      # "./gradlew: Permission denied" (exit code 126). chmod here is the belt;
+      # `git update-index --chmod=+x gradlew` (see CONTRIBUTING.md) is the
+      # suspenders that fixes it for every future checkout.
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -59,6 +72,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -74,6 +90,17 @@ jobs:
 
       - name: Build release APK
         run: ./gradlew assembleRelease --stacktrace
+
+      # The release notes file must exist for the tagged version; if it is
+      # missing, fall back to a placeholder instead of failing the release.
+      - name: Prepare release notes
+        run: |
+          NOTES="docs/release-notes/v${{ steps.version.outputs.name }}.md"
+          if [ ! -f "$NOTES" ]; then
+            mkdir -p docs/release-notes
+            printf '# oneCR v%s\n\nRelease notes for this version were not added yet.\n' \
+              "${{ steps.version.outputs.name }}" > "$NOTES"
+          fi
 
       - name: Rename and checksum
         run: |

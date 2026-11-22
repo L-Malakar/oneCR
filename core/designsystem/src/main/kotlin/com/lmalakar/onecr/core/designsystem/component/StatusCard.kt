@@ -56,8 +56,11 @@ fun StatusCard(
                 StatusTone.PRIMARY ->
                     MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
 
+                // Themed amber family (v0.2.3): the warning tone now uses the
+                // scheme's tertiaryContainer instead of a hardcoded amber that
+                // lacked contrast on the light container backgrounds.
                 StatusTone.WARNING ->
-                    MaterialTheme.colorScheme.secondaryContainer to androidx.compose.ui.graphics.Color(0xFFF59E0B)
+                    MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
 
                 StatusTone.NEUTRAL ->
                     MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant

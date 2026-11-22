@@ -42,6 +42,15 @@ oneCR/
 
 Boundary rules: UI only in `:app`/`:feature:*`; privileged code only in `:privilege:*` (minimal); audio/encoding only in `:svc-recorder`; no network code anywhere except the Model Manager in `:data-files`.
 
+**UI shell & navigation model (v0.2.3).** `OneCRApp` is a single-activity,
+top-level-tab shell (Dashboard / Library / Settings) with no navigation
+library. System back is coordinated by one shell `BackHandler` plus per-screen
+handlers (later registrations win): the notification center, settings
+sub-pages and onboarding steps intercept first; the shell then pops a
+`rememberSaveable` visited-tab history; at the root a second press within
+~2.2 s confirms the exit. All colors come from the complete Material 3 scheme
+in `:core-designsystem` (`theme/Color.kt` is the only place hex values live).
+
 ## 3. Privilege layer
 
 `PrivilegeProvider` (in `:priv-api`) has two implementations behind one AIDL surface:

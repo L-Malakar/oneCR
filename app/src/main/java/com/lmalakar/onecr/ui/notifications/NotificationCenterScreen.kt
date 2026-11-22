@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -67,6 +68,8 @@ fun NotificationCenterScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // System back closes the center instead of leaving the app (v0.2.3).
+    BackHandler { onBack() }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { onRefreshPermissions() }

@@ -1,5 +1,6 @@
 package com.lmalakar.onecr.feature.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,9 @@ fun EventLogScreen(
 ) {
     val entries by events.collectAsState()
     val timeFormat = rememberFormat()
+
+    // System back returns to the settings root (v0.2.3).
+    BackHandler { onBack() }
 
     Column(
         modifier = modifier
