@@ -11,12 +11,16 @@ package com.lmalakar.onecr.data.files
  * ├── models/
  * │   ├── whisper/<ggml model>.bin
  * │   └── llm/<gguf model>.gguf
+ * ├── logs/events.jsonl                             (detection + privilege event log, M2)
  * └── export/                                      (staging for bulk SAF export)
  */
 object StorageLayout {
     const val RECORDINGS_ROOT = "recordings"
     const val MODELS_ROOT = "models"
     const val EXPORT_ROOT = "export"
+
+    const val LOGS_ROOT = "logs"
+    const val EVENT_LOG_FILE = "events.jsonl"
 
     const val RAW_SUBDIR = "raw"
     const val FINAL_SUBDIR = "final"

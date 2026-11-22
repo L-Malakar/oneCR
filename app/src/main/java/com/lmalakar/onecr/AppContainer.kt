@@ -2,12 +2,46 @@ package com.lmalakar.onecr
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
+import com.lmalakar.onecr.core.common.DefaultDispatchersProvider
+import com.lmalakar.onecr.core.common.DispatchersProvider
+import com.lmalakar.onecr.core.common.Logger
+import com.lmalakar.onecr.core.common.SystemTimeProvider
 import com.lmalakar.onecr.core.model.AppInfo
+import com.lmalakar.onecr.data.files.AppSettingsStore
+import com.lmalakar.onecr.data.files.EventLogStore
+import com.lmalakar.onecr.privilege.api.BootCountStore
+import com.lmalakar.onecr.privilege.api.PrivilegeHealthMonitor
+import com.lmalakar.onecr.privilege.api.PrivilegeProvider
+import com.lmalakar.onecr.service.detection.CallerIdResolver
+import com.lmalakar.onecr.service.detection.DetectionEngine
+import com.lmalakar.onecr.service.detection.DetectionServiceHost
+import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import java.io.File
+
+/** Logcat-backed Logger (kept out of core:common so that module stays pure JVM). */
+class AndroidLogger : Logger {
+    override fun d(tag: String, message: String) { Log.d(tag, message) }
+    override fun w(tag: String, message: String) { Log.w(tag, message) }
+    override fun e(tag: String, message: String, error: Throwable?) {
+        Log.e(tag, message, error)
+    }
+}
+
+/** SharedPreferences-backed BOOT_COUNT memory for the health monitor. */
+private class PrefsBootCountStore(context: Context) : BootCountStore {
+    private val prefs = context.getSharedPreferences("privilege_health", Context.MODE_PRIVATE)
+    override fun lastKnownBootCount(): Int = prefs.getInt("boot_count", -1)
+    override fun rememberBootCount(count: Int) {
+        prefs.edit().putInt("boot_count", count).apply()
+    }
+}
 
 /**
- * Minimal service-locator container for M1. Grows with the milestones
- * (privilege providers in M2, recorder + repositories in M3/M4, engines in M5).
- * Hilt can replace this later if the graph becomes non-trivial.
+ * Manual service-locator container. Grows with the milestones (recorder +
+ * repositories in M3/M4, engines in M5); swap for Hilt when the graph gets heavy.
  */
 class AppContainer(appContext: Context) {
 
@@ -16,4 +50,40 @@ class AppContainer(appContext: Context) {
         versionCode = BuildConfig.VERSION_CODE.toString(),
         buildType = BuildConfig.BUILD_TYPE,
     )
+
+    val dispatchers: DispatchersProvider = DefaultDispatchersProvider()
+    val logger: Logger = AndroidLogger()
+    val settings = AppSettingsStore(appContext)
+
+    /** App-lifetime scope for monitors and long-lived collectors. */
+    val appScope = CoroutineScope(SupervisorJob() + dispatchers.default)
+
+    val eventLog = EventLogStore(File(appContext.filesDir, "logs"))
+
+    // ---- Privilege bridge (v0.2.0: Shizuku; embedded ADB joins in v0.3.0) ----
+    val shizukuProvider = ShizukuPrivilegeProvider(appContext, dispatchers)
+    val privilegeProvider: PrivilegeProvider = shizukuProvider
+    val privilegeMonitor = PrivilegeHealthMonitor(
+        provider = privilegeProvider,
+        appContext = appContext,
+        scope = appScope,
+        dispatchers = dispatchers,
+        bootCountStore = PrefsBootCountStore(appContext),
+    )
+
+    // ---- Detection (M2) ----
+    val callerIdResolver = CallerIdResolver(appContext)
+    val detection = DetectionEngine(
+        appContext = appContext,
+        dispatchers = dispatchers,
+        time = SystemTimeProvider(),
+        logger = logger,
+        callerId = callerIdResolver,
+        eventLog = eventLog,
+    )
+
+    init {
+        DetectionServiceHost.engineProvider = { detection }
+        privilegeMonitor.start()
+    }
 }

@@ -43,4 +43,9 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))
+    implementation(project(":data:files"))
+    implementation(project(":privilege:api"))
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.kotlinx.coroutines.core)
 }

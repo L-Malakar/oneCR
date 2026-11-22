@@ -31,5 +31,15 @@ tasks.withType<KotlinCompile>().configureEach {
 }
 
 dependencies {
+    implementation(project(":core:common"))
     implementation(project(":core:model"))
+    implementation(project(":data:files"))
+
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+
+    // Pure-JVM state machines + heuristic — no android.* in their imports.
+    testImplementation(libs.junit)
+    testImplementation(project(":core:common"))
 }

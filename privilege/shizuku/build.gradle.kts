@@ -19,6 +19,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    buildFeatures {
+        // IShellService.aidl — the shell bridge surface loaded by the Shizuku server.
+        aidl = true
+    }
+
     lint {
         abortOnError = false
     }
@@ -32,4 +37,10 @@ tasks.withType<KotlinCompile>().configureEach {
 
 dependencies {
     implementation(project(":privilege:api"))
+    implementation(project(":core:common"))
+    implementation(project(":core:model"))
+
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
+    implementation(libs.kotlinx.coroutines.core)
 }

@@ -32,4 +32,6 @@ tasks.withType<KotlinCompile>().configureEach {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:common"))
+    implementation(libs.kotlinx.coroutines.core)
 }

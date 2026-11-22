@@ -15,15 +15,23 @@ Status legend: [ ] planned, [~] in progress, [x] done.
 - [x] Toolchain-verified compile: Gradle 8.10.2, AGP 8.7.3, Kotlin 2.0.21, JDK 17 — `assembleDebug`, `assembleRelease`, `test` all green; release-signing flow verified end-to-end (apksigner + zipalign checks green)
 - [ ] Verified on a real device from a clean clone via `build.bat` (owner)
 
-## M2 — Privilege bridge and call detection
-- [ ] `:priv-shizuku`: bind, permission request, user service, binder-death handling
-- [ ] `:priv-adb`: wireless-debugging pairing protocol + local adb client (may land as M2.5)
-- [ ] `PrivilegeHealthMonitor` + status UI + repair screens (pairing lost, dev options off, reboot)
-- [ ] Onboarding wizard with per-OEM guidance (OPPO/OnePlus/Realme, MIUI, One UI battery steps)
-- [ ] Cellular call detection state machine + caller ID (READ_PHONE_STATE / CallLog)
-- [ ] VoIP detection: notification listener + playback-configuration + recording-configuration heuristics
-- [ ] Permission center screen + debug Event Log screen
-- Exit criteria: reliable labeled call events on the test device; graceful degradation when privileges drop.
+## M2 — Privilege bridge and call detection (v0.2.0)
+- [x] `:priv-shizuku`: bind, permission request, user service (`IShellService` AIDL), binder-death handling (v0.2.0)
+- [x] `PrivilegeHealthMonitor` + status UI + repair actions (install/start/grant/verify, reboot banner) (v0.2.0)
+- [x] Onboarding wizard with per-OEM guidance (OPPO/OnePlus/Realme, MIUI, One UI, vivo) (v0.2.0)
+- [x] Cellular call detection state machine + caller ID (READ_PHONE_STATE / CallLog enrichment) (v0.2.0)
+- [x] VoIP detection: notification listener + playback-configuration heuristics (debounced) (v0.2.0)
+- [x] Permission center screen + debug Event Log screen (v0.2.0)
+- [x] Detection foreground service (specialUse) + live status notification (v0.2.0)
+- [x] Unit tests for the pure state machines + event store (22 green) (v0.2.0)
+- [ ] `:priv-adb`: wireless-debugging pairing protocol + local adb client — **moved to M2.5 (v0.3.0)**, shipped after the Shizuku path is field-proven
+- [ ] Exit criteria: reliable labeled call events on the test device; graceful degradation when privileges drop (needs owner device testing)
+
+## M2.5 — Embedded ADB bridge (v0.3.0)
+- [ ] Wireless-debugging pairing protocol (TLS + 6-digit code) on-device
+- [ ] Local adb client: connect to own adbd, spawn capture dex via `app_process`
+- [ ] adb key persistence, Wi-Fi-once-after-reboot UX, Developer-options guard
+- [ ] Privilege mode picker in Settings (Shizuku ↔ embedded ADB)
 
 ## M3 — Audio capture engine
 - [ ] Shell capture dex (`probe`/`start`/`stop`, PCM over pipe FD)

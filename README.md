@@ -10,24 +10,32 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android%2011%2B%20%28arm64%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.1.2-orange)](CHANGELOG.md)
+[![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28arm64%29-green)](README.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-orange)](CHANGELOG.md)
 
 </div>
 
 ---
 
-## What it does (planned)
+## What it does
 
 | Feature | Status |
 |---|---|
-| Two-sided cellular call recording without root (embedded ADB / Shizuku shell bridge) | M2-M3 |
-| VoIP call recording (WhatsApp etc.) via playback capture + mic mix | M3 |
+| **Privilege bridge via Shizuku** — tiny AIDL shell service running as UID 2000, health monitoring, one-tap repair | **v0.2.0** |
+| **Cellular call detection** — incoming/outgoing/missed events, caller ID from the call log | **v0.2.0** |
+| **VoIP call detection** — debounced notification + audio heuristics for WhatsApp and friends | **v0.2.0** |
+| **Onboarding wizard, permission center, local event log** | **v0.2.0** |
+| Embedded ADB bridge (no extra app; wireless-debugging pairing on-device) | v0.3.0 (M2.5) |
+| Two-sided cellular call recording through the shell bridge | M3 |
+| VoIP call recording via playback capture + mic mix | M3 |
 | Recordings library with player, tags and local full-text search | M4 |
 | On-device transcription (whisper.cpp, multilingual) | M5 |
 | On-device call summaries (llama.cpp, Qwen2.5-1.5B default) | M5 |
 | Local export (TXT / SRT / VTT / MD / JSON / audio) | M4 |
 | Model manager (download with checksum verification, or sideload via SAF) | M5 |
+
+**v0.2.0 is a detection-only build** — it sees and labels calls, proves the shell
+bridge, and logs everything locally. No audio is recorded until M3.
 
 ## Why oneCR is different
 
@@ -63,8 +71,8 @@ Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/r
 1. **Android 8.0 or newer is required to install** (API 26+). The capture features that ship from M2 onward need **Android 11+** — the app checks that at runtime and shows a clear message, instead of refusing to install.
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
-4. If an older oneCR build is already installed and the new one refuses to install over it, uninstall the old one first (Settings → Apps → oneCR → Uninstall). This only happens across different signing keys; the prebuilt releases and your own `build.bat` builds share the `.signing/` keystore shipped in the source zip, so they update in place.
-5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.1.2.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+4. **Updating from the v0.1.2 pre-release:** v0.2.0 was signed with a fresh release keystore (the original was lost with the build machine), so Android will refuse an in-place update once — **uninstall v0.1.2 first, then install v0.2.0**. If you still have the `.signing/` folder from the v0.1.2 source zip, build v0.2.0 yourself with it (`build.bat` picks it up automatically) and the update installs in place instead. From v0.2.0 onward the shipped keystore stays stable.
+5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.0.apk SHA256` on Windows). A truncated download is the most common cause of that error.
 6. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning.
 
 ## Project structure
@@ -75,13 +83,14 @@ oneCR/
 ├── app/                       Compose UI, navigation, app wiring
 ├── core/                      shared model / utilities / design system
 ├── feature/                   onboarding, library, settings screens
-├── privilege/                 Shizuku + embedded-ADB shell bridges (AIDL)
-├── service/                   call detection + recording foreground service
-├── data/                      Room database + file/model storage
+├── privilege/                 Shizuku bridge (v0.2.0) + embedded-ADB (v0.3.0)
+├── service/                   call detection (v0.2.0) + recording service (M3)
+├── data/                      JSONL event log + settings (v0.2.0), Room (M4), model storage
 ├── ai/                        whisper.cpp + llama.cpp JNI wrappers, pipeline
 ├── third_party/               pinned native dependencies (added at M5)
 ├── docs/                      architecture, roadmap, compatibility, branding
-│   └── branding/              logo.svg, logo-flat.svg, PNG exports
+│   ├── branding/              logo.svg, logo-flat.svg, PNG exports
+│   └── release-notes/         GitHub release bodies, one file per version
 └── CHANGELOG.md               release history
 ```
 
@@ -89,7 +98,7 @@ The full engineering plan, privilege model and database schema live in [docs/ARC
 
 ## Device compatibility
 
-The APK installs on Android 8+; the recording features target Android 11+ on arm64-v8a. Behavior varies by OEM — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known constraints and how to add your device. Highlights: on OPPO/OnePlus/Realme enable "Disable permission monitoring"; on aggressive OEMs (MIUI/OxygenOS/One UI) exclude oneCR from battery optimization and allow auto-launch.
+The APK installs on Android 8+; detection works on Android 8+, and the capture features that arrive in M3 target Android 11+ on arm64-v8a. Behavior varies by OEM — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) for known constraints and how to add your device. Highlights: on OPPO/OnePlus/Realme enable "Disable permission monitoring"; on aggressive OEMs (MIUI/OxygenOS/One UI) exclude oneCR from battery optimization and allow auto-launch. For the v0.2.0 privilege bridge you need the free [Shizuku](https://shizuku.rikka.app/) app started (once per reboot); the embedded-ADB bridge that removes even that requirement lands in v0.3.0.
 
 ## Legal notice
 

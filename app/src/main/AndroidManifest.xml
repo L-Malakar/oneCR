@@ -2,9 +2,35 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        M1 skeleton: ZERO permissions requested. Permission grants arrive with their
-        features (see PRIVACY.md for the full table and the reason for each).
+        M2 permission set. Every permission is requested in context and can be
+        declined — the related feature simply stays off (see PRIVACY.md).
+        RECORD_AUDIO and the projection consent dialog arrive with capture (M3).
     -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!--
+        Package visibility (no QUERY_ALL_PACKAGES): only the Shizuku bridge and the
+        fixed VoIP allowlist are visible to package queries.
+    -->
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.facebook.orca" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+        <package android:name="org.thoughtcrime.securesms" />
+        <package android:name="com.viber.voip" />
+        <package android:name="com.skype.raider" />
+        <package android:name="com.google.android.apps.tachyon" />
+        <package android:name="us.zoom.videomeetings" />
+        <package android:name="com.discord" />
+    </queries>
+
     <application
         android:name=".OneCRApplication"
         android:allowBackup="true"
@@ -23,6 +49,42 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Shizuku API initialization — required by dev.rikka.shizuku:api
+            (the AAR manifest only carries the V3 meta-data, the provider entry
+            itself must be declared by the app, per Shizuku's integration docs).
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!--
+            Detection foreground service (M2). specialUse with an honest sub-type;
+            the microphone/mediaProjection-typed recorder service replaces this in M3.
+        -->
+        <service
+            android:name="com.lmalakar.onecr.service.detection.CallDetectionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="call_state_detection_for_user_initiated_recording" />
+        </service>
+
+        <!-- VoIP heuristic input (1): ongoing call notifications from allowlisted apps. -->
+        <service
+            android:name="com.lmalakar.onecr.service.detection.VoipNotificationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

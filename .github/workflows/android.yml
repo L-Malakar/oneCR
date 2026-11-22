@@ -50,7 +50,8 @@ jobs:
   release:
     name: Publish GitHub release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Matches this repo's tag convention (0.1.2, 0.2.0, … — no "v" prefix).
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -67,18 +68,24 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Read version from gradle.properties
+        id: version
+        run: echo "name=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
+
       - name: Build release APK
         run: ./gradlew assembleRelease --stacktrace
 
-      - name: Compute checksums
+      - name: Rename and checksum
         run: |
           cd app/build/outputs/apk/release
-          sha256sum app-release.apk > SHA256SUMS.txt
+          cp app-release.apk "oneCR-v${{ steps.version.outputs.name }}.apk"
+          sha256sum "oneCR-v${{ steps.version.outputs.name }}.apk" > SHA256SUMS.txt
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          name: oneCR v${{ steps.version.outputs.name }}
+          body_path: docs/release-notes/v${{ steps.version.outputs.name }}.md
           files: |
-            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/oneCR-v${{ steps.version.outputs.name }}.apk
             app/build/outputs/apk/release/SHA256SUMS.txt
-          generate_release_notes: true

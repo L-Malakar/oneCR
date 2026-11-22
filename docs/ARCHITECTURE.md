@@ -52,18 +52,22 @@ Boundary rules: UI only in `:app`/`:feature:*`; privileged code only in `:privil
 | Shizuku | user installs Shizuku, pairs, oneCR requests permission and binds a user service | battle-tested, simplest fallback |
 
 ```java
-interface IShellCaptureService {
-    CaptureCapability probe();          // which VOICE_* sources return audio + sample rates
-    void start(int audioSource, in ParcelFileDescriptor pipe, int requestedSampleRate);
-    void stop();
-    HealthInfo health();
+interface IShellService {
+    String exec(String command);   // v0.2.0 — proves the shell bridge (runs `id`)
+    int getUid();                  // expect 2000 (shell)
+    // M3 adds: probe() / start(audioSource, pipeFd, sampleRate) / stop()
 }
 ```
 
-The shell-side dex does **nothing but** open an `AudioRecord` and stream raw PCM into a pipe FD. Encoding/storage/AI/UI run in the normal app process. `PrivilegeHealthMonitor` publishes `StateFlow<PrivilegeState>` (`OK`, `PAIRING_LOST`, `DEV_OPTIONS_OFF`, `SERVICE_DEAD`, `UNSUPPORTED`, `NOT_CONFIGURED`) with ping (30 s) + binder death + reboot detection (`Settings.Global.BOOT_COUNT`) and one-tap repair screens.
+The v0.2.0 shell-side class is deliberately tiny: it runs `sh -c` for the verify
+step and reports its UID — nothing else. The audio-capture methods (open an
+`AudioRecord`, stream raw PCM into a pipe FD) join it in M3. Encoding/storage/AI/UI
+run in the normal app process. `PrivilegeHealthMonitor` publishes
+`StateFlow<PrivilegeHealth>` (`state + detail + action`) with ping (30 s) + binder
+death + reboot detection (`Settings.Global.BOOT_COUNT`) and one-tap repair actions.
 
-Cellular call detection: `TelephonyCallback` (31+) / `PhoneStateListener` (30) → RINGING/OFFHOOK/IDLE state machine; incoming number from listener, outgoing resolved post-call from CallLog.
-VoIP detection (local only): (1) `NotificationListenerService` ongoing `CATEGORY_CALL` notifications from a package allowlist, (2) `AudioManager.registerAudioPlaybackCallback` with `USAGE_VOICE_COMMUNICATION` active, (3) active recording configurations holding the mic. Trigger = 1 AND (2 OR 3), debounced; manual record button as universal fallback.
+Cellular call detection (**shipped in v0.2.0**): `CallStateMachine` (pure, unit-tested) fed by `TelephonyCallback` (31+) / `PhoneStateListener` (26–30) → RINGING/OFFHOOK/IDLE events; incoming/outgoing/missed labeling; numbers resolved post-call from the newest CallLog row (bounded window, newest entry only).
+VoIP detection (**shipped in v0.2.0**, local only): (1) `NotificationListenerService` ongoing `CATEGORY_CALL` notifications from a package allowlist, (2) `AudioManager.registerAudioPlaybackCallback` with `USAGE_VOICE_COMMUNICATION` active. Trigger = 1 AND 2, debounced 1.5 s both ways (`VoipHeuristic`, pure, unit-tested); manual record button as universal fallback (M3). Detection events land in the in-app Event Log (`files/logs/events.jsonl`).
 
 ## 4. Capture pipeline
 

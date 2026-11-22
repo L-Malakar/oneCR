@@ -32,4 +32,7 @@ tasks.withType<KotlinCompile>().configureEach {
 
 dependencies {
     implementation(project(":core:model"))
+
+    // EventLogStore is pure java.io — testable on the JVM.
+    testImplementation(libs.junit)
 }

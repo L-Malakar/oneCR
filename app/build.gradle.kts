@@ -42,6 +42,11 @@ android {
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
+                // v1 keeps legacy installers (Android 8–10 OEM package parsers) happy;
+                // v2/v3 are the modern default. All three together = maximum reach.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -93,6 +98,9 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:designsystem"))
     implementation(project(":privilege:api"))
+    implementation(project(":privilege:shizuku"))
+    implementation(project(":service:detection"))
+    implementation(project(":data:files"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:library"))
     implementation(project(":feature:settings"))
@@ -103,5 +111,6 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.kotlinx.coroutines.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
