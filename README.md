@@ -4,14 +4,14 @@
 
 # oneCR
 
-**Local-first, privacy-focused call recorder for Android 11+ with on-device AI transcription and summarization.**
+**Local-first, privacy-focused call recorder for Android 8+ with on-device AI transcription and summarization.**
 
 Your calls never leave your phone. No accounts, no cloud, no telemetry — just a clean recording library with local whisper.cpp transcription and llama.cpp summaries.
 
 <!-- Download button: on every release, bump the version in the link AND in the button label. -->
 <p>
-  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.0/oneCR-v0.2.0.apk">
-    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.0%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.0 APK"/>
+  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.1/oneCR-v0.2.1.apk">
+    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.1%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.1 APK"/>
   </a>
   &nbsp;
   <a href="https://github.com/L-Malakar/oneCR/releases">
@@ -21,8 +21,8 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28arm64%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.2.0-orange)](CHANGELOG.md)
+[![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28all%20ABIs%29-green)](README.md)
+[![Version](https://img.shields.io/badge/version-0.2.1-orange)](CHANGELOG.md)
 
 </div>
 
@@ -36,6 +36,7 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | **Cellular call detection** — incoming/outgoing/missed events, caller ID from the call log | **v0.2.0** |
 | **VoIP call detection** — debounced notification + audio heuristics for WhatsApp and friends | **v0.2.0** |
 | **Onboarding wizard, permission center, local event log** | **v0.2.0** |
+| **Light / Dark / System theme** — follows the OS by default, pinnable in Settings | **v0.2.1** |
 | Embedded ADB bridge (no extra app; wireless-debugging pairing on-device) | v0.3.0 (M2.5) |
 | Two-sided cellular call recording through the shell bridge | M3 |
 | VoIP call recording via playback capture + mic mix | M3 |
@@ -45,7 +46,7 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | Local export (TXT / SRT / VTT / MD / JSON / audio) | M4 |
 | Model manager (download with checksum verification, or sideload via SAF) | M5 |
 
-**v0.2.0 is a detection-only build** — it sees and labels calls, proves the shell
+**v0.2.x is a detection-only build** — it sees and labels calls, proves the shell
 bridge, and logs everything locally. No audio is recorded until M3.
 
 ## Why oneCR is different
@@ -79,12 +80,12 @@ Linux/macOS: `./gradlew :app:assembleDebug`.
 
 Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/releases) (or the `oneCR/Android/` folder after a local build) and open it on your phone:
 
-1. **Android 8.0 or newer is required to install** (API 26+). The capture features that ship from M2 onward need **Android 11+** — the app checks that at runtime and shows a clear message, instead of refusing to install.
+1. **Android 8.0 or newer is required to install** (API 26+), on any CPU (the APK is universal: arm64-v8a / armeabi-v7a / x86 / x86_64). Cellular and VoIP **detection** work from Android 8; only the **embedded-ADB bridge (v0.3.0)** needs Android 11+, and that is checked at runtime with a clear message instead of refusing to install.
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
 4. **Play Protect may stop the install with "This app can request access to sensitive data."** That warning is automatic for *any* sideloaded app that requests Call Log / Phone permissions — it is a heuristic caution, not a malware verdict (the code is public in this repo and each release lists its SHA-256). Tap **More details → Install anyway (unsafe)** to continue. To stop the prompts for good: Play Store → profile icon → **Play Protect** → ⚙ **Settings** → turn off **Scan apps with Play Protect** (and **Require Play Protect review for apps** on Android 15+). It cannot be avoided in code — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md#play-protect-and-sideloading).
-5. **Updating from the v0.1.2 pre-release:** v0.2.0 was signed with a fresh release keystore (the original was lost with the build machine), so Android will refuse an in-place update once — **uninstall v0.1.2 first, then install v0.2.0**. If you still have the `.signing/` folder from the v0.1.2 source zip, build v0.2.0 yourself with it (`build.bat` picks it up automatically) and the update installs in place instead. From v0.2.0 onward the shipped keystore stays stable.
-6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.0.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+5. **Updating:** from v0.2.0 the release keystore is stable, so v0.2.1 installs in place over v0.2.0 — nothing to do. Only the v0.1.2 pre-release (signed with the lost original key) needs a one-time uninstall first.
+6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.1.apk SHA256` on Windows). A truncated download is the most common cause of that error.
 7. Some OEM ROMs (MIUI/ColorOS) also block sideloads under "Install via USB" — approve the install when prompted, or enable that toggle in Developer options.
 
 ## Project structure

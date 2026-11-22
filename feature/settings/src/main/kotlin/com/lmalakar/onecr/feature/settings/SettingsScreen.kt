@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lmalakar.onecr.core.model.AppInfo
+import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.EventLogEntry
 import com.lmalakar.onecr.privilege.api.PrivilegeAction
 import com.lmalakar.onecr.privilege.api.PrivilegeHealth
@@ -56,14 +58,16 @@ import kotlinx.coroutines.launch
 private enum class SettingsPage { ROOT, PERMISSIONS, EVENT_LOG }
 
 /**
- * v0.2.0 settings: live privilege bridge card + permission center + event log,
- * with future sections (models, storage) still labeled by milestone.
+ * v0.2.1 settings: theme picker + live privilege bridge card + permission center
+ * + event log, with future sections (models, storage) still labeled by milestone.
  */
 @Composable
 fun SettingsScreen(
     appInfo: AppInfo,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
+    themeMode: ThemeMode,
+    onThemeChange: (ThemeMode) -> Unit,
     onGrantShizukuPermission: () -> Unit,
     onOpenShizuku: () -> Unit,
     onInstallShizuku: () -> Unit,
@@ -79,6 +83,8 @@ fun SettingsScreen(
             appInfo = appInfo,
             privilegeHealth = privilegeHealth,
             recentEvents = recentEvents,
+            themeMode = themeMode,
+            onThemeChange = onThemeChange,
             onGrantShizukuPermission = onGrantShizukuPermission,
             onOpenShizuku = onOpenShizuku,
             onInstallShizuku = onInstallShizuku,
@@ -112,6 +118,8 @@ private fun RootSettings(
     appInfo: AppInfo,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
+    themeMode: ThemeMode,
+    onThemeChange: (ThemeMode) -> Unit,
     onGrantShizukuPermission: () -> Unit,
     onOpenShizuku: () -> Unit,
     onInstallShizuku: () -> Unit,
@@ -135,6 +143,43 @@ private fun RootSettings(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
+
+        // ---------------- Appearance (v0.2.1) ----------------
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Appearance", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Light or dark theme. \"System default\" follows your phone's dark-mode setting.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                ThemeMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onThemeChange(mode) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = mode == themeMode,
+                            onClick = { onThemeChange(mode) },
+                        )
+                        Text(
+                            text = mode.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
 
         // ---------------- Privilege bridge (live) ----------------
         Surface(

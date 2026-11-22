@@ -1,13 +1,16 @@
 package com.lmalakar.onecr
 
 import android.app.Application
+import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.mutableStateOf
 import com.lmalakar.onecr.core.common.DefaultDispatchersProvider
 import com.lmalakar.onecr.core.common.DispatchersProvider
 import com.lmalakar.onecr.core.common.Logger
 import com.lmalakar.onecr.core.common.SystemTimeProvider
 import com.lmalakar.onecr.core.model.AppInfo
+import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.AppSettingsStore
 import com.lmalakar.onecr.data.files.EventLogStore
 import com.lmalakar.onecr.privilege.api.BootCountStore
@@ -69,6 +72,10 @@ class AppContainer(appContext: Context) {
         scope = appScope,
         dispatchers = dispatchers,
         bootCountStore = PrefsBootCountStore(appContext),
+        // Low-end optimization: on Android Go / low-RAM devices the health ping
+        // runs every 2 min instead of 30 s. Binder-death callbacks still fire
+        // instantly, so repair UX is unchanged — this only trims idle wakeups.
+        pingIntervalMs = if (isLowRamDevice(appContext)) 120_000L else 30_000L,
     )
 
     // ---- Detection (M2) ----
@@ -82,8 +89,23 @@ class AppContainer(appContext: Context) {
         eventLog = eventLog,
     )
 
+    // ---- Appearance (v0.2.1) ----
+    /** Compose-observable mirror of [AppSettingsStore.themeMode]; SYSTEM by default. */
+    val themeMode = mutableStateOf(settings.themeMode)
+
+    /** Persist a theme choice and recompose the UI in one step. */
+    fun setThemeMode(mode: ThemeMode) {
+        settings.themeMode = mode
+        themeMode.value = mode
+    }
+
     init {
         DetectionServiceHost.engineProvider = { detection }
         privilegeMonitor.start()
     }
+
+    private fun isLowRamDevice(context: Context): Boolean =
+        runCatching {
+            (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
+        }.getOrDefault(false)
 }

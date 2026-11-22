@@ -4,6 +4,37 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.2.1] — 2026-11-22
+
+Polish release: **theme setting + low-end device support.** The app now follows
+the phone's dark-mode setting by default and can be pinned to Light or Dark from
+Settings. Low-end devices get fewer idle wakeups and a smaller resource table,
+and the docs/onboarding now state plainly that oneCR installs and detects on
+Android 8+ (only the v0.3.0 embedded-ADB bridge will need 11+).
+
+### Added
+- **Theme setting** (`core/model` + `data/files` + `feature/settings`): new
+  `ThemeMode` enum (SYSTEM / LIGHT / DARK, default SYSTEM) persisted through
+  `AppSettingsStore`; an *Appearance* card in Settings with radio options;
+  `AppContainer.themeMode` mirrors the preference as Compose state so a change
+  recomposes the whole tree instantly and survives restarts.
+- **`ThemeModeTest`** (`core/model`): 3 unit tests pinning the persistence
+  contract (round-trip of storage keys, SYSTEM fallback for unknown values).
+
+### Changed
+- **Low-end optimizations:** on `ActivityManager.isLowRamDevice` devices the
+  privilege health ping interval extends from 30 s to 2 min (binder-death
+  callbacks remain instant); `resourceConfigurations` strips the ~40 unused
+  AndroidX locales from the APK; docs now note the APK is universal
+  (arm64-v8a / armeabi-v7a / x86 / x86_64) so 32-bit Android 8 phones install it.
+- **Android 8+ messaging corrected:** README tagline, badges, onboarding
+  Device-step text and `docs/COMPATIBILITY.md` now say detection + the Shizuku
+  bridge run on Android 8+; the 11+ floor belongs to the v0.3.0 embedded-ADB
+  mode only (comment on `PrivilegeHealthMonitor.platformSupported` updated).
+  No behavioral gate changed — the runtime fallbacks
+  (`PhoneStateListener` on API 26–30, `TelephonyCallback` on 31+,
+  FGS type on 34+, `POST_NOTIFICATIONS` on 33+) were already in place.
+
 ## [0.2.0] — 2026-11-22
 
 Milestone 2: **the privilege bridge and call detection are real.** oneCR now sees

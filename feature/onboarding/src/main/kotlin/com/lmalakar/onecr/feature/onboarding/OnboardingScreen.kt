@@ -188,7 +188,7 @@ private fun WelcomeStep() {
         subtitle = "Local-first, privacy-focused call recording for Android.",
     ) {
         Bullet("Recording, transcription and summaries happen 100% on this phone — no cloud, no account, no telemetry.")
-        Bullet("This release (v0.2.0) sets up the privilege bridge and detects calls. Recording itself arrives in v0.3.x.")
+        Bullet("This release sets up the privilege bridge and detects calls. Recording itself arrives in v0.3.x.")
         Bullet("Detection is local. Numbers shown in the app are read from your call log, which never leaves the device.")
     }
 }
@@ -197,18 +197,23 @@ private fun WelcomeStep() {
 private fun DeviceStep() {
     val context = LocalContext.current
     val sdk = Build.VERSION.SDK_INT
-    val supported = sdk >= 30
+    val fullSupport = sdk >= 30
     StepScaffold(
         icon = Icons.Filled.Settings,
         title = "Device check",
         subtitle = "Android ${Build.VERSION.RELEASE} (API $sdk)",
     ) {
-        if (supported) {
-            Bullet(good = true, text = "Android 11+ — the privilege bridge and capture path are supported.")
+        // Install floor is Android 8 (API 26): detection + the Shizuku bridge run
+        // everywhere. Only the embedded-ADB mode (v0.3.0) wants Android 11+.
+        if (fullSupport) {
+            Bullet(good = true, text = "Android 11+ — detection and the Shizuku bridge are supported, and the embedded-ADB bridge (v0.3.0) will work too.")
         } else {
             Bullet(
-                text = "This phone runs Android ${Build.VERSION.RELEASE}. Call DETECTION works from Android 8, " +
-                    "but privileged call RECORDING (M3) needs Android 11+. You can finish setup and use detection.",
+                good = true,
+                text = "Android 8–10 — call detection and the Shizuku privilege bridge are fully supported on this phone.",
+            )
+            Bullet(
+                text = "The embedded-ADB mode arriving in v0.3.0 needs Android 11+. Shizuku mode covers everything this release does.",
             )
         }
         Bullet("Shizuku mode (this release) needs the free Shizuku app; embedded ADB mode arrives in v0.3.0.")

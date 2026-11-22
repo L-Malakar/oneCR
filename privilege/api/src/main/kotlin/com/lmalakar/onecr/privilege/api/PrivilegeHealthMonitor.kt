@@ -145,7 +145,11 @@ class PrivilegeHealthMonitor(
         }
 
     companion object {
-        /** True when the OS is new enough for the privileged capture path (Android 11+). */
+        /**
+         * True when the OS is new enough for the embedded-ADB bridge (Android 11+,
+         * wireless-debugging pairing). This gate applies to v0.3.0's embedded-ADB
+         * mode ONLY — detection and the Shizuku bridge (v0.2.x) run on Android 8+.
+         */
         fun platformSupported(): Boolean = Build.VERSION.SDK_INT >= 30
     }
 }

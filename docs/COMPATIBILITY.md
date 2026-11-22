@@ -4,8 +4,20 @@ oneCR's shell-privilege capture depends on OEM audio routing, so behavior is dev
 
 ## Install floor vs. feature floor
 
-- **Installing:** the APK installs on **Android 8.0+ (API 26+)**. If a phone shows "There was a problem parsing the package", the download is corrupt or truncated — not a version issue.
-- **Recording (M2+):** cellular capture via the embedded-ADB bridge needs **Android 11+ (API 30+)** wireless-debugging pairing; the app detects the Android version at runtime and explains what is missing. Shizuku mode works on older versions if Shizuku itself runs there.
+- **Installing:** the APK installs on **Android 8.0+ (API 26+)** on any ABI — the release APK is universal (arm64-v8a / armeabi-v7a / x86 / x86_64), so 32-bit Android 8 budget phones install it too. If a phone shows "There was a problem parsing the package", the download is corrupt or truncated — not a version issue.
+- **Detection (v0.2.x):** cellular and VoIP detection work from **Android 8.0**. The code paths fall back by API level automatically (`PhoneStateListener` on 26–30, `TelephonyCallback` on 31+, foreground-service typing on 34+, runtime notification permission only on 33+).
+- **Embedded-ADB bridge (v0.3.0):** needs **Android 11+ (API 30+)** wireless-debugging pairing; the app detects the Android version at runtime and explains what is missing. Shizuku mode works on Android 8+ wherever Shizuku itself runs.
+
+## Low-end devices
+
+oneCR is deliberately light: the release build is R8-shrunk to roughly 1 MB, unused AndroidX locale resources are stripped, and the UI ships no heavy effects. Two behaviors adapt to weak hardware:
+
+| Signal | Behavior |
+|---|---|
+| `ActivityManager.isLowRamDevice` (Android Go / ≤2 GB RAM) | Privilege-bridge health ping drops from every 30 s to every 2 min — fewer idle wakeups and battery drain; binder-death callbacks still fire instantly, so repair UX is unchanged. |
+| Any device | Detection uses passive listeners (telephony callback, notification listener, audio playback callback) — nothing polls in a loop. |
+
+If you hit jank or kill-on-memory-pressure on a specific low-end device, add a row under "Tested devices" with the model and RAM.
 
 ## Play Protect and sideloading
 

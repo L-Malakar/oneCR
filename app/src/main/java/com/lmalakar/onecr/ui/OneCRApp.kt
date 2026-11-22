@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.AppContainer
+import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.feature.library.LibraryScreen
 import com.lmalakar.onecr.feature.onboarding.OnboardingScreen
 import com.lmalakar.onecr.feature.settings.SettingsScreen
@@ -104,6 +105,8 @@ fun OneCRApp(container: AppContainer) {
                     appInfo = container.appInfo,
                     privilegeHealth = container.privilegeMonitor.health,
                     recentEvents = container.detection.recentEvents,
+                    themeMode = container.themeMode.value,
+                    onThemeChange = container::setThemeMode,
                     onGrantShizukuPermission = container.shizukuProvider::requestPermission,
                     onOpenShizuku = {
                         val launch = container.shizukuProvider.shizukuLaunchIntent()
