@@ -27,17 +27,12 @@ android {
     defaultConfig {
         applicationId = "com.lmalakar.onecr"
         // Install floor = Android 8.0 so the shell reaches every device that may
-        // sideload a smoke-test APK. Detection (M2) works from Android 8;
-        // embedded-ADB capture (v0.3.0) requires Android 11+ and is gated at
-        // runtime, not at install time.
+        // sideload a smoke-test APK. Production capture features (M2+) require
+        // Android 11+ and are gated at runtime, not at install time.
         minSdk = 26
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
-        // Low-end optimization: the UI ships English only — strip the dozens of
-        // locale resources AndroidX libraries bundle, keeping the APK (and the
-        // resource table low-RAM phones have to load) small.
-        resourceConfigurations += listOf("en")
     }
 
     signingConfigs {
@@ -104,6 +99,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":privilege:api"))
     implementation(project(":privilege:shizuku"))
+    implementation(project(":privilege:embedded-adb"))
     implementation(project(":service:detection"))
     implementation(project(":data:files"))
     implementation(project(":feature:onboarding"))
@@ -111,15 +107,11 @@ dependencies {
     implementation(project(":feature:settings"))
 
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)
-    // Full icon set for the icon-driven UI (v0.2.4); R8 trims unused icons in release.
-    implementation(libs.androidx.compose.material.icons.extended)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.kotlinx.coroutines.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
-    testImplementation(libs.junit)
 }
