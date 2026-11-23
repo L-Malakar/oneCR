@@ -58,18 +58,8 @@ class CallDetectionService : Service() {
         }
         engine = detection
         createChannel()
-        // A failed startForeground must stop the service or Android kills the
-        // process (ForegroundServiceDidNotStartInTime). The failure is logged
-        // as an error event so the notification center can show it (v0.2.2).
-        val foregroundOk = runCatching { startInForeground() }
-            .onFailure { e -> detection.logError("Foreground service failed to start: ${e.message}") }
-            .isSuccess
-        if (!foregroundOk) {
-            stopSelf()
-            return
-        }
-        runCatching { detection.start() }
-            .onFailure { e -> detection.logError("Detection engine failed to start: ${e.message}") }
+        startInForeground()
+        detection.start()
 
         stateJob = serviceScope.launch {
             detection.callState.collect { state ->
@@ -85,27 +75,7 @@ class CallDetectionService : Service() {
                 return START_NOT_STICKY
             }
         }
-        // START_STICKY: if the system ever kills the watcher process, it is
-        // restarted with a null intent and onCreate re-asserts the foreground
-        // notification and the engine — the 24×7 watch resumes on its own.
         return START_STICKY
-    }
-
-    /**
-     * v0.2.6 — the fix for "the 'Watching for calls' notification disappears
-     * when I close the app". Swiping the app from Recents (or closing it from
-     * a launcher) removes the task but must NOT remove the watcher: the
-     * foreground service stays alive, the engine keeps listening, and the
-     * notification is re-asserted because some OEM task managers clear the
-     * notification together with the task.
-     */
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
-        engine?.logService("App closed — detection keeps running in the background")
-        runCatching { startInForeground() }
-            .onFailure { e ->
-                engine?.logError("Could not re-assert the watcher notification: ${e.message}")
-            }
     }
 
     override fun onDestroy() {
@@ -137,7 +107,6 @@ class CallDetectionService : Service() {
     private fun updateNotification(text: String) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         runCatching { nm.notify(DetectionContract.NOTIFICATION_ID, buildNotification(text)) }
-            .onFailure { e -> engine?.logError("Could not update the detection notification: ${e.message}") }
     }
 
     private fun buildNotification(text: String): Notification =
