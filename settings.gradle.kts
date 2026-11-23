@@ -11,11 +11,6 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
-        // Aliyun mirrors Maven Central and is consulted first for third-party
-        // artifacts: repo.maven.apache.org rate-limits some IPs (HTTP 429),
-        // which aborts first-time builds of this project. Maven Central stays
-        // in the list as the canonical fallback (v0.2.4).
-        maven("https://maven.aliyun.com/repository/public")
         mavenCentral()
         gradlePluginPortal()
     }
@@ -25,7 +20,6 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
-        maven("https://maven.aliyun.com/repository/public")
         mavenCentral()
     }
 }
