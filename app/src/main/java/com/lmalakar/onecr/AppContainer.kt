@@ -1,29 +1,24 @@
 package com.lmalakar.onecr
 
 import android.app.Application
-import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import kotlinx.coroutines.flow.MutableStateFlow
 import com.lmalakar.onecr.core.common.DefaultDispatchersProvider
 import com.lmalakar.onecr.core.common.DispatchersProvider
 import com.lmalakar.onecr.core.common.Logger
 import com.lmalakar.onecr.core.common.SystemTimeProvider
 import com.lmalakar.onecr.core.model.AppInfo
-import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.AppSettingsStore
 import com.lmalakar.onecr.data.files.EventLogStore
-import com.lmalakar.onecr.notify.NotificationCenter
-import com.lmalakar.onecr.notify.PermissionReader
 import com.lmalakar.onecr.privilege.api.BootCountStore
 import com.lmalakar.onecr.privilege.api.PrivilegeHealthMonitor
+import com.lmalakar.onecr.privilege.api.PrivilegeMode
 import com.lmalakar.onecr.privilege.api.PrivilegeProvider
+import com.lmalakar.onecr.privilege.embeddedadb.EmbeddedAdbPrivilegeProvider
+import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
 import com.lmalakar.onecr.service.detection.CallerIdResolver
 import com.lmalakar.onecr.service.detection.DetectionEngine
 import com.lmalakar.onecr.service.detection.DetectionServiceHost
-import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import java.io.File
@@ -52,7 +47,8 @@ private class PrefsBootCountStore(context: Context) : BootCountStore {
  */
 class AppContainer(appContext: Context) {
 
-    private val appContext = appContext
+    /** App context for checks that outlive the constructor scope. */
+    private val appContext: Context = appContext.applicationContext
 
     val appInfo: AppInfo = AppInfo(
         versionName = BuildConfig.VERSION_NAME,
@@ -69,20 +65,46 @@ class AppContainer(appContext: Context) {
 
     val eventLog = EventLogStore(File(appContext.filesDir, "logs"))
 
-    // ---- Privilege bridge (v0.2.0: Shizuku; embedded ADB joins in v0.3.0) ----
+    // ---- Privilege bridges ----
+    // v0.2.0: Shizuku. v0.3.0 (M2.5): embedded ADB joins; the stored mode picks
+    // which one is live. Switching modes rebuilds the health monitor.
     val shizukuProvider = ShizukuPrivilegeProvider(appContext, dispatchers)
-    val privilegeProvider: PrivilegeProvider = shizukuProvider
-    val privilegeMonitor = PrivilegeHealthMonitor(
+    val embeddedAdbProvider = EmbeddedAdbPrivilegeProvider(appContext, dispatchers)
+
+    private fun providerFor(mode: String?): PrivilegeProvider =
+        if (mode == PrivilegeMode.EMBEDDED_ADB.name) embeddedAdbProvider else shizukuProvider
+
+    var privilegeProvider: PrivilegeProvider = providerFor(settings.privilegeMode)
+        private set
+
+    var privilegeMonitor: PrivilegeHealthMonitor = PrivilegeHealthMonitor(
         provider = privilegeProvider,
         appContext = appContext,
         scope = appScope,
         dispatchers = dispatchers,
         bootCountStore = PrefsBootCountStore(appContext),
-        // Low-end optimization: on Android Go / low-RAM devices the health ping
-        // runs every 2 min instead of 30 s. Binder-death callbacks still fire
-        // instantly, so repair UX is unchanged — this only trims idle wakeups.
-        pingIntervalMs = if (isLowRamDevice(appContext)) 120_000L else 30_000L,
     )
+        private set
+
+    /**
+     * Selects the active privilege bridge and restarts health monitoring.
+     * Persists the choice so the next launch comes up in the same mode.
+     */
+    fun setPrivilegeMode(modeName: String) {
+        val next = providerFor(modeName)
+        settings.privilegeMode = modeName
+        if (next === privilegeProvider) return
+        privilegeMonitor.stop()
+        privilegeProvider = next
+        privilegeMonitor = PrivilegeHealthMonitor(
+            provider = next,
+            appContext = appContext,
+            scope = appScope,
+            dispatchers = dispatchers,
+            bootCountStore = PrefsBootCountStore(appContext),
+        )
+        privilegeMonitor.start()
+    }
 
     // ---- Detection (M2) ----
     val callerIdResolver = CallerIdResolver(appContext)
@@ -95,64 +117,8 @@ class AppContainer(appContext: Context) {
         eventLog = eventLog,
     )
 
-    // ---- Appearance (v0.2.1) ----
-    /** Compose-observable mirror of [AppSettingsStore.themeMode]; SYSTEM by default. */
-    val themeMode = mutableStateOf(settings.themeMode)
-
-    /** Persist a theme choice, recompose the UI and re-sync the platform night mode. */
-    fun setThemeMode(mode: ThemeMode) {
-        settings.themeMode = mode
-        themeMode.value = mode
-        // v0.2.4: the window background, system bars and platform dialogs follow
-        // the app setting too, not just the Compose palette.
-        applyPlatformNightMode(mode)
-    }
-
-    // ---- Motion (v0.2.6) ----
-    /**
-     * Compose-observable mirror of [AppSettingsStore.animationsEnabled]; ON by
-     * default. Provided app-wide as [LocalMotionEnabled] from MainActivity, so
-     * every transition, crossfade and pulse can honor the user's choice.
-     */
-    val animationsEnabled = mutableStateOf(settings.animationsEnabled)
-
-    /** Persist the animations toggle; recomposes every transition app-wide. */
-    fun setAnimationsEnabled(enabled: Boolean) {
-        settings.animationsEnabled = enabled
-        animationsEnabled.value = enabled
-    }
-
-    // ---- Notification center (v0.2.2) ----
-
-    /** Live permission snapshot; republished on resume and after every grant action. */
-    val permissions = MutableStateFlow(PermissionReader.read(appContext))
-
-    /** Bumped from MainActivity.onResume — screens can key recomposition off it. */
-    val resumeTick = mutableIntStateOf(0)
-
-    /** The v0.2.2 notification center: needs + errors + activity in one feed. */
-    val notificationCenter = NotificationCenter(
-        settings = settings,
-        health = privilegeMonitor.health,
-        events = detection.recentEvents,
-        permissions = permissions,
-        running = detection.running,
-        showBridge = { settings.privilegeMode != null },
-        scope = appScope,
-    )
-
-    /** Re-read the OS permission state (call after grants and on resume). */
-    fun refreshPermissions() {
-        permissions.value = PermissionReader.read(appContext)
-    }
-
     init {
         DetectionServiceHost.engineProvider = { detection }
         privilegeMonitor.start()
     }
-
-    private fun isLowRamDevice(context: Context): Boolean =
-        runCatching {
-            (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)?.isLowRamDevice == true
-        }.getOrDefault(false)
 }
