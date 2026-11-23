@@ -1,6 +1,19 @@
 package com.lmalakar.onecr.ui.dashboard
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.List
@@ -45,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -56,6 +71,8 @@ import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.AppContainer
 import com.lmalakar.onecr.R
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
+import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
+import com.lmalakar.onecr.core.designsystem.motion.motionPulseAlpha
 import com.lmalakar.onecr.data.files.EventLogEntry
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.service.detection.CallDetectionService
@@ -222,6 +239,50 @@ fun DashboardScreen(
             }
         }
 
+        // v0.2.6: the companion of the "watcher survives app close" fix — if
+        // battery optimization is still active, many ROMs pause the 24×7
+        // watcher as soon as the app is closed. One tap fixes it.
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val batteryExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+        if (!batteryExempt) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.BatteryChargingFull,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        text = "The 24×7 watcher can be paused when the app is closed. " +
+                            "Allow background running to keep it alive.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                                        .setData(Uri.parse("package:${context.packageName}"))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    ) { Text("Allow") }
+                }
+            }
+        }
+
         // ---------------- Recent activity ---------------------------------------
         SectionHeader("Recent activity")
         ActivityCard(
@@ -310,10 +371,14 @@ private fun CommandCard(
 
                 // ---- Live state row ----
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Status dot: teal when live, muted when off.
+                    // Status dot: teal when live (with a gentle breathing pulse,
+                    // v0.2.6), muted when off.
+                    val motionDot = LocalMotionEnabled.current
+                    val dotPulse = motionPulseAlpha(motionDot)
                     Box(
                         modifier = Modifier
                             .size(12.dp)
+                            .graphicsLayer { alpha = if (running) dotPulse else 1f }
                             .clip(CircleShape)
                             .background(
                                 if (running) {
@@ -411,9 +476,13 @@ private fun StatusPill(live: Boolean) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // The pill dot breathes in sync with the hero dot when live (v0.2.6).
+            val motionPill = LocalMotionEnabled.current
+            val pillPulse = motionPulseAlpha(motionPill)
             Box(
                 modifier = Modifier
                     .size(8.dp)
+                    .graphicsLayer { alpha = if (live) pillPulse else 1f }
                     .clip(CircleShape)
                     .background(
                         if (live) {
@@ -466,12 +535,31 @@ private fun StatTile(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            // v0.2.6: when a counter changes, the old number fades up and out
+            // while the new one fades in — no hard text swap (instant when
+            // Animations is off).
+            val motionTile = LocalMotionEnabled.current
+            AnimatedContent(
+                targetState = value,
+                transitionSpec = {
+                    if (motionTile) {
+                        (
+                            fadeIn(tween(200)) +
+                                slideInVertically(tween(200)) { it / 2 }
+                            ) togetherWith fadeOut(tween(150))
+                    } else {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    }
+                },
+                label = "statValue",
+            ) { target ->
+                Text(
+                    text = target,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
@@ -627,8 +715,16 @@ private fun RoadmapCard() {
                     )
                 }
             }
+            // v0.2.6: the roadmap bar glides to its value instead of snapping
+            // (instant when Animations is off).
+            val motionRoadmap = LocalMotionEnabled.current
+            val animatedDone by animateFloatAsState(
+                targetValue = done / MILESTONES.size.toFloat(),
+                animationSpec = tween(durationMillis = if (motionRoadmap) 700 else 0),
+                label = "roadmapProgress",
+            )
             LinearProgressIndicator(
-                progress = { done / MILESTONES.size.toFloat() },
+                progress = { animatedDone },
                 modifier = Modifier.fillMaxWidth(),
             )
             MILESTONES.forEach { row ->

@@ -315,6 +315,11 @@ class DetectionEngine(
         log(EventLogEntry.KIND_ERROR, message)
     }
 
+    /** Logs a service-lifecycle event (v0.2.6) — e.g. the app task being closed. */
+    fun logService(message: String) {
+        log(EventLogEntry.KIND_SERVICE, message)
+    }
+
     // ------------------------------------------------------------------
 
     private fun mask(number: String?): String = when {

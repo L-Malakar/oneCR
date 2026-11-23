@@ -108,6 +108,20 @@ class AppContainer(appContext: Context) {
         applyPlatformNightMode(mode)
     }
 
+    // ---- Motion (v0.2.6) ----
+    /**
+     * Compose-observable mirror of [AppSettingsStore.animationsEnabled]; ON by
+     * default. Provided app-wide as [LocalMotionEnabled] from MainActivity, so
+     * every transition, crossfade and pulse can honor the user's choice.
+     */
+    val animationsEnabled = mutableStateOf(settings.animationsEnabled)
+
+    /** Persist the animations toggle; recomposes every transition app-wide. */
+    fun setAnimationsEnabled(enabled: Boolean) {
+        settings.animationsEnabled = enabled
+        animationsEnabled.value = enabled
+    }
+
     // ---- Notification center (v0.2.2) ----
 
     /** Live permission snapshot; republished on resume and after every grant action. */

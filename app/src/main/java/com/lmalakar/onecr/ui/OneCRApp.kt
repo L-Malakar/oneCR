@@ -6,7 +6,18 @@ import android.content.ContextWrapper
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +62,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.AppContainer
 import com.lmalakar.onecr.R
+import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
+import com.lmalakar.onecr.core.designsystem.motion.MOTION_ENTER_MS
+import com.lmalakar.onecr.core.designsystem.motion.MOTION_EXIT_MS
 import com.lmalakar.onecr.core.designsystem.theme.AmberAccent
 import com.lmalakar.onecr.core.designsystem.theme.BadgeInk
 import com.lmalakar.onecr.feature.library.LibraryScreen
@@ -83,6 +97,11 @@ private tailrec fun Context.findHostActivity(): Activity? = when (this) {
  * v0.2.3 shell: branded top app bar (logo + tab + version) with a notification
  * bell on the top-right; the bell opens the notification center — one place for
  * everything the app needs, its errors and its activity log.
+ *
+ * v0.2.6: the logo + name block in the top bar is a home button — tapping it
+ * always returns to the Dashboard, from wherever the user is. Tabs and the
+ * notification center animate (slide + fade) when the Animations setting is
+ * on (default), and swap instantly when it is off.
  *
  * Back navigation (v0.2.3): system back now walks the user back through the
  * screens they visited instead of killing the app. Sub-screens (notification
@@ -174,6 +193,13 @@ fun OneCRApp(container: AppContainer) {
                 showOnboarding = false
                 if (autostart) startDetectionService()
             },
+            // v0.2.6: the Skip escape hatch — leave the wizard without touching
+            // any setting. Everything the user had configured before re-running
+            // the wizard stays exactly as it was; the shell simply comes back.
+            onSkip = {
+                container.settings.onboardingCompleted = true
+                showOnboarding = false
+            },
         )
         return
     }
@@ -190,9 +216,15 @@ fun OneCRApp(container: AppContainer) {
         topBar = {
             TopAppBar(
                 title = {
+                    // v0.2.6: logo + name is a home button — tap to go to the
+                    // Dashboard from any tab. A clipped ripple keeps the
+                    // touch target honest without changing the bar's look.
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { openTab(TopLevelTab.DASHBOARD) },
                     ) {
                         Image(
                             painter = painterResource(R.drawable.ic_brand_logo),
@@ -262,44 +294,83 @@ fun OneCRApp(container: AppContainer) {
             }
         },
     ) { innerPadding ->
-        when (currentTab) {
-            TopLevelTab.DASHBOARD ->
-                DashboardScreen(
-                    container = container,
-                    onOpenNotifications = { showNotificationCenter = true },
-                    modifier = Modifier.padding(innerPadding),
-                )
+        // v0.2.6: tabs slide + fade in the direction of travel when Animations
+        // is on; with the switch off they swap instantly.
+        val motion = LocalMotionEnabled.current
+        AnimatedContent(
+            targetState = currentTab,
+            transitionSpec = {
+                if (motion) {
+                    val dir = if (targetState.ordinal >= initialState.ordinal) 1 else -1
+                    (
+                        slideInHorizontally(tween(MOTION_ENTER_MS)) { dir * it / 5 } +
+                            fadeIn(tween(MOTION_ENTER_MS))
+                        ) togetherWith (
+                        slideOutHorizontally(tween(MOTION_EXIT_MS)) { -dir * it / 5 } +
+                            fadeOut(tween(MOTION_EXIT_MS))
+                        )
+                } else {
+                    EnterTransition.None togetherWith ExitTransition.None
+                }
+            },
+            label = "tabSwitch",
+        ) { tab ->
+            when (tab) {
+                TopLevelTab.DASHBOARD ->
+                    DashboardScreen(
+                        container = container,
+                        onOpenNotifications = { showNotificationCenter = true },
+                        modifier = Modifier.padding(innerPadding),
+                    )
 
-            TopLevelTab.LIBRARY ->
-                LibraryScreen(modifier = Modifier.padding(innerPadding))
+                TopLevelTab.LIBRARY ->
+                    LibraryScreen(modifier = Modifier.padding(innerPadding))
 
-            TopLevelTab.SETTINGS ->
-                SettingsScreen(
-                    appInfo = container.appInfo,
-                    logoRes = R.drawable.ic_brand_logo,
-                    privilegeHealth = container.privilegeMonitor.health,
-                    recentEvents = container.detection.recentEvents,
-                    permissions = container.permissions,
-                    onRefreshPermissions = container::refreshPermissions,
-                    themeMode = container.themeMode.value,
-                    onThemeChange = container::setThemeMode,
-                    onGrantShizukuPermission = container.shizukuProvider::requestPermission,
-                    onOpenShizuku = {
-                        val launch = container.shizukuProvider.shizukuLaunchIntent()
-                        if (launch != null) runCatching { context.startActivity(launch) }
-                    },
-                    onInstallShizuku = {
-                        runCatching { context.startActivity(container.shizukuProvider.shizukuInstallIntent()) }
-                    },
-                    onVerifyBridge = { container.privilegeProvider.runShellCommand("id") },
-                    onClearEventLog = container.detection::clearLog,
-                    onRerunOnboarding = { showOnboarding = true },
-                    modifier = Modifier.padding(innerPadding),
-                )
+                TopLevelTab.SETTINGS ->
+                    SettingsScreen(
+                        appInfo = container.appInfo,
+                        logoRes = R.drawable.ic_brand_logo,
+                        privilegeHealth = container.privilegeMonitor.health,
+                        recentEvents = container.detection.recentEvents,
+                        permissions = container.permissions,
+                        onRefreshPermissions = container::refreshPermissions,
+                        themeMode = container.themeMode.value,
+                        onThemeChange = container::setThemeMode,
+                        animationsEnabled = container.animationsEnabled.value,
+                        onAnimationsChange = container::setAnimationsEnabled,
+                        onGrantShizukuPermission = container.shizukuProvider::requestPermission,
+                        onOpenShizuku = {
+                            val launch = container.shizukuProvider.shizukuLaunchIntent()
+                            if (launch != null) runCatching { context.startActivity(launch) }
+                        },
+                        onInstallShizuku = {
+                            runCatching { context.startActivity(container.shizukuProvider.shizukuInstallIntent()) }
+                        },
+                        onVerifyBridge = { container.privilegeProvider.runShellCommand("id") },
+                        onClearEventLog = container.detection::clearLog,
+                        onRerunOnboarding = { showOnboarding = true },
+                        modifier = Modifier.padding(innerPadding),
+                    )
+            }
         }
     }
 
-    if (showNotificationCenter) {
+    // The notification center slides in from the right edge and slides back
+    // out on close (v0.2.6, honors the Animations switch).
+    val motionNow = LocalMotionEnabled.current
+    AnimatedVisibility(
+        visible = showNotificationCenter,
+        enter = if (motionNow) {
+            slideInHorizontally(tween(MOTION_ENTER_MS)) { it } + fadeIn(tween(MOTION_ENTER_MS))
+        } else {
+            EnterTransition.None
+        },
+        exit = if (motionNow) {
+            slideOutHorizontally(tween(MOTION_EXIT_MS)) { it } + fadeOut(tween(MOTION_EXIT_MS))
+        } else {
+            ExitTransition.None
+        },
+    ) {
         NotificationCenterScreen(
             model = notificationModel,
             onRefreshPermissions = container::refreshPermissions,

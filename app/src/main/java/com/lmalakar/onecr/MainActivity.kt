@@ -6,8 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
 import com.lmalakar.onecr.core.designsystem.theme.OneCRTheme
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.service.detection.CallDetectionService
@@ -44,6 +46,9 @@ class MainActivity : AppCompatActivity() {
             // v0.2.1 theme setting: SYSTEM follows the OS, LIGHT/DARK are pinned.
             // Reading container.themeMode here recomposes the whole tree on change.
             val themeMode by container.themeMode
+            // v0.2.6 motion setting: provided once here so every transition,
+            // crossfade and pulse in the app honors the Animations switch.
+            val animationsEnabled by container.animationsEnabled
             OneCRTheme(
                 darkTheme = when (themeMode) {
                     ThemeMode.DARK -> true
@@ -51,7 +56,9 @@ class MainActivity : AppCompatActivity() {
                     ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 },
             ) {
-                OneCRApp(container = container)
+                CompositionLocalProvider(LocalMotionEnabled provides animationsEnabled) {
+                    OneCRApp(container = container)
+                }
             }
         }
     }

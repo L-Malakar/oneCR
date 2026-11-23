@@ -7,6 +7,16 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,6 +56,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,6 +73,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
+import com.lmalakar.onecr.core.designsystem.motion.MOTION_ENTER_MS
+import com.lmalakar.onecr.core.designsystem.motion.MOTION_EXIT_MS
 import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.privilege.api.PrivilegeHealth
 import com.lmalakar.onecr.privilege.api.PrivilegeState
@@ -147,6 +161,12 @@ private fun stepIcon(step: Int) = when (step) {
  * the length of each step's text. The screen also paints the scheme's own
  * background now, so it follows the dark theme even before the platform
  * window background catches up.
+ *
+ * v0.2.6: a **Skip** button sits in the top-right corner of the header. It is
+ * the escape hatch for a "Re-run the setup wizard" tap that was an accident —
+ * one press leaves the wizard without touching any setting. Steps also slide
+ * and fade as you move through the wizard, and the progress bar animates to
+ * its new position (all gated by the Animations switch).
  */
 @Composable
 fun OnboardingScreen(
@@ -160,6 +180,7 @@ fun OnboardingScreen(
     onVerifyBridge: suspend () -> ShellCommandResult,
     onRefreshPermissions: () -> Unit,
     onComplete: (autostartDetection: Boolean) -> Unit,
+    onSkip: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -182,7 +203,7 @@ fun OnboardingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // ---- Fixed header: icon + title + progress -------------------------
+        // ---- Fixed header: icon + title + progress + Skip -----------------
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -220,9 +241,23 @@ fun OnboardingScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // v0.2.6: the escape hatch for an accidental "Re-run the setup
+                // wizard" — one tap leaves the wizard without changing anything.
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = onSkip) {
+                    Text("Skip")
+                }
             }
+            // v0.2.6: the progress bar glides to its new position instead of
+            // jumping (instant when Animations is off).
+            val motionProgress = LocalMotionEnabled.current
+            val animatedProgress by animateFloatAsState(
+                targetValue = (step + 1f) / STEP_COUNT,
+                animationSpec = tween(durationMillis = if (motionProgress) 320 else 0),
+                label = "wizardProgress",
+            )
             LinearProgressIndicator(
-                progress = { (step + 1f) / STEP_COUNT },
+                progress = { animatedProgress },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -235,24 +270,48 @@ fun OnboardingScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            when (step) {
-                0 -> WelcomeStep()
-                1 -> DeviceStep()
-                2 -> BridgeStep(
-                    health = health,
-                    isShizukuInstalled = isShizukuInstalled,
-                    onInstallShizuku = onInstallShizuku,
-                    onOpenShizuku = onOpenShizuku,
-                    onRequestShizukuPermission = onRequestShizukuPermission,
-                    onVerifyBridge = onVerifyBridge,
-                )
-                3 -> OemStep()
-                4 -> PermissionsStep(permissionSnapshot, onRefreshPermissions)
-                5 -> DoneStep(
-                    versionName = versionName,
-                    autostart = autostart,
-                    onAutostartChange = { autostart = it },
-                )
+            // v0.2.6: steps slide and fade in the direction of travel; instant
+            // when the Animations switch is off.
+            val motionSteps = LocalMotionEnabled.current
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    if (motionSteps) {
+                        val dir = if (targetState > initialState) 1 else -1
+                        (
+                            slideInHorizontally(tween(MOTION_ENTER_MS)) { dir * it / 5 } +
+                                fadeIn(tween(MOTION_ENTER_MS))
+                            ) togetherWith (
+                            slideOutHorizontally(tween(MOTION_EXIT_MS)) { -dir * it / 5 } +
+                                fadeOut(tween(MOTION_EXIT_MS))
+                            )
+                    } else {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    }
+                },
+                label = "wizardStep",
+            ) { target ->
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    when (target) {
+                        0 -> WelcomeStep()
+                        1 -> DeviceStep()
+                        2 -> BridgeStep(
+                            health = health,
+                            isShizukuInstalled = isShizukuInstalled,
+                            onInstallShizuku = onInstallShizuku,
+                            onOpenShizuku = onOpenShizuku,
+                            onRequestShizukuPermission = onRequestShizukuPermission,
+                            onVerifyBridge = onVerifyBridge,
+                        )
+                        3 -> OemStep()
+                        4 -> PermissionsStep(permissionSnapshot, onRefreshPermissions)
+                        5 -> DoneStep(
+                            versionName = versionName,
+                            autostart = autostart,
+                            onAutostartChange = { autostart = it },
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }

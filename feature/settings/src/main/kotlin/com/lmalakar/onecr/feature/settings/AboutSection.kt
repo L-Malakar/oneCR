@@ -17,8 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Architecture
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -39,12 +41,22 @@ import androidx.compose.ui.unit.dp
 import com.lmalakar.onecr.core.model.AppInfo
 
 private const val PROJECT_URL = "https://github.com/L-Malakar/oneCR"
+private const val DEVELOPER_URL = "https://github.com/L-Malakar"
+private const val BUGS_URL = "https://github.com/L-Malakar/oneCR/issues"
+private const val PRIVACY_URL = "https://github.com/L-Malakar/oneCR/blob/main/PRIVACY.md"
+private const val LICENSE_URL = "https://github.com/L-Malakar/oneCR/blob/main/LICENSE"
+private const val RELEASES_URL = "https://github.com/L-Malakar/oneCR/releases"
 
 /**
  * v0.2.3 About section — the plain text block of v0.2.2 became a branded card:
  * a gradient header with the logo, tagline and version chips, then icon rows
  * for the project home, privacy, license and exact build, and a setup-wizard
  * shortcut. Uses only scheme colors, so it adapts to dark/light automatically.
+ *
+ * v0.2.6: every row opens its own page now — Privacy goes to PRIVACY.md,
+ * License to LICENSE and Build to the Releases page, exactly like Project
+ * home already did. Two new rows join them: **Developer** (Lalmohan Malakar's
+ * GitHub profile) and **Report a bug** (the issue tracker).
  */
 @Composable
 internal fun AboutSection(
@@ -117,29 +129,47 @@ internal fun AboutSection(
             detail = "github.com/L-Malakar/oneCR — source, releases and issue tracker",
             detailColor = MaterialTheme.colorScheme.primary,
             showChevron = true,
-            onClick = {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_URL)))
-                }
-            },
+            onClick = { openUrl(context, PROJECT_URL) },
+        )
+        AboutRow(
+            icon = Icons.Filled.Person,
+            title = "Developer",
+            detail = "Lalmohan Malakar — github.com/L-Malakar",
+            detailColor = MaterialTheme.colorScheme.primary,
+            showChevron = true,
+            onClick = { openUrl(context, DEVELOPER_URL) },
+        )
+        AboutRow(
+            icon = Icons.Filled.BugReport,
+            title = "Report a bug",
+            detail = "github.com/L-Malakar/oneCR/issues — everything in the app stays local",
+            detailColor = MaterialTheme.colorScheme.primary,
+            showChevron = true,
+            onClick = { openUrl(context, BUGS_URL) },
         )
         AboutRow(
             icon = Icons.Filled.PrivacyTip,
             title = "Privacy by design",
             detail = "No cloud, no account, no telemetry. Audio, transcripts and the " +
-                "event log stay on this device — see PRIVACY.md.",
+                "event log stay on this device — open PRIVACY.md.",
+            showChevron = true,
+            onClick = { openUrl(context, PRIVACY_URL) },
         )
         AboutRow(
             icon = Icons.Filled.Gavel,
             title = "License",
             detail = "MIT. Recording laws vary by region — use lawfully and inform " +
-                "call participants.",
+                "call participants. Open the license text.",
+            showChevron = true,
+            onClick = { openUrl(context, LICENSE_URL) },
         )
         AboutRow(
             icon = Icons.Filled.Architecture,
             title = "Build",
             detail = "oneCR v${appInfo.versionName} (${appInfo.buildType}), " +
-                "version code ${appInfo.versionCode}",
+                "version code ${appInfo.versionCode} — open the Releases page.",
+            showChevron = true,
+            onClick = { openUrl(context, RELEASES_URL) },
         )
 
         OutlinedButton(
@@ -166,6 +196,13 @@ private fun InfoChip(text: String) {
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+/** Opens an external page in the browser; a no-op if nothing can handle it. */
+private fun openUrl(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 }
 

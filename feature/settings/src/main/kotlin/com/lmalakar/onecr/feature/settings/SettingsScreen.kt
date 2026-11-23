@@ -1,37 +1,61 @@
 package com.lmalakar.onecr.feature.settings
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Animation
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Contrast
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,10 +68,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
+import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
+import com.lmalakar.onecr.core.designsystem.motion.MOTION_ENTER_MS
+import com.lmalakar.onecr.core.designsystem.motion.MOTION_EXIT_MS
 import com.lmalakar.onecr.core.model.AppInfo
 import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.core.model.ThemeMode
@@ -68,10 +98,23 @@ private fun themeIcon(mode: ThemeMode): ImageVector = when (mode) {
     ThemeMode.LIGHT -> Icons.Filled.LightMode
 }
 
+/** Short labels for the segmented theme picker (the full label is too wide). */
+private fun themeSegmentLabel(mode: ThemeMode): String = when (mode) {
+    ThemeMode.SYSTEM -> "System"
+    ThemeMode.LIGHT -> "Light"
+    ThemeMode.DARK -> "Dark"
+}
+
 /**
  * v0.2.2 settings: the same sections as v0.2.1 (theme, bridge, permissions,
  * event log, about) grouped under section headers, with a live permission
  * summary on the Permission center link.
+ *
+ * v0.2.6: the panel grew a modern look — every card leads with a colored icon
+ * tile, the theme choice became a three-way segmented control with icons, and
+ * a new Animations switch (default ON) gates every transition in the app. A
+ * battery-optimization card under "Keep alive" protects the 24×7 watcher, and
+ * the Permission center / Event log pages now slide in and out.
  */
 @Composable
 fun SettingsScreen(
@@ -83,6 +126,8 @@ fun SettingsScreen(
     onRefreshPermissions: () -> Unit,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
+    animationsEnabled: Boolean,
+    onAnimationsChange: (Boolean) -> Unit,
     onGrantShizukuPermission: () -> Unit,
     onOpenShizuku: () -> Unit,
     onInstallShizuku: () -> Unit,
@@ -105,39 +150,63 @@ fun SettingsScreen(
     // leaving the app (v0.2.3).
     BackHandler(enabled = page != SettingsPage.ROOT) { page = SettingsPage.ROOT }
 
-    when (page) {
-        SettingsPage.ROOT -> RootSettings(
-            appInfo = appInfo,
-            logoRes = logoRes,
-            privilegeHealth = privilegeHealth,
-            recentEvents = recentEvents,
-            permissions = permissions,
-            themeMode = themeMode,
-            onThemeChange = onThemeChange,
-            onGrantShizukuPermission = onGrantShizukuPermission,
-            onOpenShizuku = onOpenShizuku,
-            onInstallShizuku = onInstallShizuku,
-            onVerifyBridge = onVerifyBridge,
-            onRerunOnboarding = onRerunOnboarding,
-            onOpenPermissions = { page = SettingsPage.PERMISSIONS },
-            onOpenEventLog = { page = SettingsPage.EVENT_LOG },
-            scrollState = rootScrollState,
-            modifier = modifier,
-        )
+    // v0.2.6: sub-pages slide in the direction of travel; instant when the
+    // Animations switch is off.
+    val motion = LocalMotionEnabled.current
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            if (motion) {
+                val dir = if (targetState.ordinal >= initialState.ordinal) 1 else -1
+                (
+                    slideInHorizontally(tween(MOTION_ENTER_MS)) { dir * it / 5 } +
+                        fadeIn(tween(MOTION_ENTER_MS))
+                    ) togetherWith (
+                    slideOutHorizontally(tween(MOTION_EXIT_MS)) { -dir * it / 5 } +
+                        fadeOut(tween(MOTION_EXIT_MS))
+                    )
+            } else {
+                EnterTransition.None togetherWith ExitTransition.None
+            }
+        },
+        label = "settingsPage",
+    ) { target ->
+        when (target) {
+            SettingsPage.ROOT -> RootSettings(
+                appInfo = appInfo,
+                logoRes = logoRes,
+                privilegeHealth = privilegeHealth,
+                recentEvents = recentEvents,
+                permissions = permissions,
+                themeMode = themeMode,
+                onThemeChange = onThemeChange,
+                animationsEnabled = animationsEnabled,
+                onAnimationsChange = onAnimationsChange,
+                onGrantShizukuPermission = onGrantShizukuPermission,
+                onOpenShizuku = onOpenShizuku,
+                onInstallShizuku = onInstallShizuku,
+                onVerifyBridge = onVerifyBridge,
+                onRerunOnboarding = onRerunOnboarding,
+                onOpenPermissions = { page = SettingsPage.PERMISSIONS },
+                onOpenEventLog = { page = SettingsPage.EVENT_LOG },
+                scrollState = rootScrollState,
+                modifier = modifier,
+            )
 
-        SettingsPage.PERMISSIONS -> PermissionCenterScreen(
-            permissions = permissions,
-            onRefreshPermissions = onRefreshPermissions,
-            onBack = { page = SettingsPage.ROOT },
-            modifier = modifier,
-        )
+            SettingsPage.PERMISSIONS -> PermissionCenterScreen(
+                permissions = permissions,
+                onRefreshPermissions = onRefreshPermissions,
+                onBack = { page = SettingsPage.ROOT },
+                modifier = modifier,
+            )
 
-        SettingsPage.EVENT_LOG -> EventLogScreen(
-            events = recentEvents,
-            onClear = onClearEventLog,
-            onBack = { page = SettingsPage.ROOT },
-            modifier = modifier,
-        )
+            SettingsPage.EVENT_LOG -> EventLogScreen(
+                events = recentEvents,
+                onClear = onClearEventLog,
+                onBack = { page = SettingsPage.ROOT },
+                modifier = modifier,
+            )
+        }
     }
 }
 
@@ -154,6 +223,8 @@ private fun RootSettings(
     permissions: StateFlow<PermissionSnapshot>,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
+    animationsEnabled: Boolean,
+    onAnimationsChange: (Boolean) -> Unit,
     onGrantShizukuPermission: () -> Unit,
     onOpenShizuku: () -> Unit,
     onInstallShizuku: () -> Unit,
@@ -181,52 +252,83 @@ private fun RootSettings(
         SectionHeader("Appearance")
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    IconTile(Icons.Filled.Palette)
+                    Text(
+                        "Theme",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 Text(
-                    "Theme",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    "\"System default\" follows your phone's dark-mode setting.",
+                    "\"System\" follows your phone's dark-mode setting.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                ThemeMode.entries.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onThemeChange(mode) },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ThemeMode.entries.forEachIndexed { index, mode ->
+                        SegmentedButton(
                             selected = mode == themeMode,
                             onClick = { onThemeChange(mode) },
-                        )
-                        Icon(
-                            imageVector = themeIcon(mode),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .size(18.dp),
-                            tint = if (mode == themeMode) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = index,
+                                count = ThemeMode.entries.size,
+                            ),
+                            icon = {
+                                Icon(
+                                    imageVector = themeIcon(mode),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SegmentedButtonDefaults.IconSize),
+                                )
                             },
-                        )
-                        Text(
-                            text = mode.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(start = 10.dp),
+                            label = { Text(themeSegmentLabel(mode)) },
                         )
                     }
+                }
+
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+
+                // v0.2.6: the master motion switch — ON by default. Gates every
+                // screen transition, crossfade and pulse in the app.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Animation,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Animations",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Smooth motion across screens and controls. " +
+                                "Turn off for an instant, minimal feel.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = animationsEnabled,
+                        onCheckedChange = onAnimationsChange,
+                    )
                 }
             }
         }
@@ -234,7 +336,7 @@ private fun RootSettings(
         SectionHeader("Privilege bridge")
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Column(
@@ -242,19 +344,18 @@ private fun RootSettings(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(
-                        imageVector = if (health.state == PrivilegeState.OK) {
-                            Icons.Filled.CheckCircle
+                    IconTile(
+                        if (health.state == PrivilegeState.OK) Icons.Filled.CheckCircle else Icons.Filled.Key,
+                        containerColor = if (health.state == PrivilegeState.OK) {
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
-                            Icons.Filled.Warning
+                            MaterialTheme.colorScheme.secondaryContainer
                         },
-                        contentDescription = null,
-                        tint = if (health.state == PrivilegeState.OK) {
-                            MaterialTheme.colorScheme.primary
+                        iconColor = if (health.state == PrivilegeState.OK) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
-                            MaterialTheme.colorScheme.error
+                            MaterialTheme.colorScheme.onSecondaryContainer
                         },
-                        modifier = Modifier.size(20.dp),
                     )
                     Text(
                         "Shizuku bridge — ${health.mode.name.lowercase().replaceFirstChar { it.uppercase() }}",
@@ -306,6 +407,9 @@ private fun RootSettings(
             }
         }
 
+        SectionHeader("Keep alive")
+        BatteryCard()
+
         SectionHeader("Permissions and diagnostics")
         SettingsLink(
             icon = Icons.Filled.Notifications,
@@ -348,6 +452,129 @@ private fun RootSettings(
     }
 }
 
+// ---------------------------------------------------------------------
+// Battery — protects the 24×7 watcher (v0.2.6)
+// ---------------------------------------------------------------------
+
+/**
+ * The companion card to the "Watching for calls" fix: many OEM ROMs pause
+ * background apps unless they are exempt from battery optimization. Exempting
+ * oneCR is what keeps the watcher (and its notification) alive when the app
+ * itself is closed. The state is re-read on every recomposition, so coming
+ * back from the system dialog updates the card instantly.
+ */
+@Composable
+private fun BatteryCard() {
+    val context = LocalContext.current
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+    val exempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+
+    if (exempt) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconTile(Icons.Filled.CheckCircle)
+                Column {
+                    Text(
+                        "Battery optimization",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "oneCR is exempt — the watcher keeps running with the app closed.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    } else {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.tertiaryContainer,
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.BatteryChargingFull,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        "Battery optimization",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Text(
+                        "Your ROM can pause the 24×7 watcher when oneCR is closed. " +
+                            "Exempting it keeps the \"Watching for calls\" notification alive.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Button(
+                        onClick = {
+                            runCatching {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                                    .setData(Uri.parse("package:${context.packageName}"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            }
+                        },
+                    ) {
+                        Text("Allow background running")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Reusable pieces
+// ---------------------------------------------------------------------
+
+/** Rounded tonal icon container leading modern cards (v0.2.6). */
+@Composable
+private fun IconTile(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    iconColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(containerColor),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = iconColor,
+        )
+    }
+}
+
 @Composable
 private fun SettingsLink(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -359,7 +586,7 @@ private fun SettingsLink(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
@@ -367,7 +594,7 @@ private fun SettingsLink(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            IconTile(icon)
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(
@@ -395,7 +622,7 @@ private fun FutureCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Row(
@@ -403,11 +630,10 @@ private fun FutureCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            IconTile(
+                icon,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                iconColor = MaterialTheme.colorScheme.onSecondaryContainer,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleSmall)

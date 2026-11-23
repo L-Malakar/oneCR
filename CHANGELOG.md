@@ -4,6 +4,50 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.2.6] — 2026-11-23
+
+Motion-and-survival release: **the 24×7 watcher now truly survives closing
+the app (and reboots), every screen animates with a settings switch, the
+Settings panel got a modern icon-tile look, and About rows all open their own
+pages.**
+
+### Added
+- **Animations everywhere + Animations switch** (default ON): tabs, settings
+  sub-pages, the notification center, wizard steps, the setup/roadmap
+  progress bars, stat-tile counters and the live status dots all transition
+  with consistent slide + fade motion from a new `:core:designsystem` motion
+  module (`LocalMotionEnabled`). The switch lives in Settings → Appearance;
+  turning it off makes every swap instant. Persisted via
+  `AppSettingsStore.animationsEnabled`.
+- **The 24×7 watcher survives app close and reboot** (`:app`, `:service:detection`):
+  `stopWithTask=false` is explicit on the detection service, `onTaskRemoved`
+  re-asserts the foreground notification and logs
+  "App closed — detection keeps running in the background", and a new
+  `BootReceiver` + `RECEIVE_BOOT_COMPLETED` restarts the watcher seconds
+  after a reboot when autostart was opted in during onboarding.
+- **Battery-optimization protection**: a "Keep alive" card in Settings and a
+  Dashboard banner detect a non-exempted ROM and offer a one-tap
+  `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` request — the last piece the
+  "notification disappears on close" puzzle needed on aggressive OEMs.
+- **About rows open their own pages** (`:feature:settings`): Privacy by
+  design → PRIVACY.md, License → LICENSE, Build → Releases. New **Developer**
+  row (github.com/L-Malakar) and **Report a bug** row
+  (github.com/L-Malakar/oneCR/issues), both one tap away.
+- **Top bar home button** (`:app`): the logo + name block in the top app bar
+  is now tappable and always returns to the Dashboard.
+- **Skip button on the setup wizard** (`:feature:onboarding`): a top-right
+  Skip on every step leaves the wizard without changing any setting — built
+  for accidental "Re-run the setup wizard" taps.
+
+### Changed
+- **Settings panel restyle**: rounded icon tiles lead every card, the theme
+  choice became a three-way segmented control (System / Light / Dark with
+  icons), the Privilege bridge tile colors by health state, and cards use a
+  softer 16 dp corner radius.
+- **`docs/release-notes/` now keeps only the current release's notes**; the
+  old per-version files were removed (the full history lives in
+  CHANGELOG.md).
+
 ## [0.2.5] — 2026-11-23
 
 Readability-and-dashboard release: **dark-mode text is finally correct

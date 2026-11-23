@@ -85,7 +85,27 @@ class CallDetectionService : Service() {
                 return START_NOT_STICKY
             }
         }
+        // START_STICKY: if the system ever kills the watcher process, it is
+        // restarted with a null intent and onCreate re-asserts the foreground
+        // notification and the engine — the 24×7 watch resumes on its own.
         return START_STICKY
+    }
+
+    /**
+     * v0.2.6 — the fix for "the 'Watching for calls' notification disappears
+     * when I close the app". Swiping the app from Recents (or closing it from
+     * a launcher) removes the task but must NOT remove the watcher: the
+     * foreground service stays alive, the engine keeps listening, and the
+     * notification is re-asserted because some OEM task managers clear the
+     * notification together with the task.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        engine?.logService("App closed — detection keeps running in the background")
+        runCatching { startInForeground() }
+            .onFailure { e ->
+                engine?.logError("Could not re-assert the watcher notification: ${e.message}")
+            }
     }
 
     override fun onDestroy() {

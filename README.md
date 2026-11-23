@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Logo: clicking it downloads the latest release APK (same link as the Download button). -->
-<a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.5/oneCR-v0.2.5.apk">
+<a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.6/oneCR-v0.2.6.apk">
   <img src="docs/branding/logo.svg" width="128" alt="oneCR logo" />
 </a>
 
@@ -13,8 +13,8 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 
 <!-- Download button: on every release, bump the version in the link AND in the button label. -->
 <p>
-  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.5/oneCR-v0.2.5.apk">
-    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.5%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.5 APK"/>
+  <a href="https://github.com/L-Malakar/oneCR/releases/download/0.2.6/oneCR-v0.2.6.apk">
+    <img src="https://img.shields.io/badge/Download-oneCR%20v0.2.6%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.2.6 APK"/>
   </a>
   &nbsp;
   <a href="https://github.com/L-Malakar/oneCR/releases">
@@ -26,7 +26,7 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28all%20ABIs%29-green)](README.md)
 [![Developer](https://img.shields.io/badge/developer-Lalmohan%20Malakar-8957e5?logo=github&logoColor=white)](https://github.com/L-Malakar)
-[![Version](https://img.shields.io/badge/version-0.2.5-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.6-orange)](CHANGELOG.md)
 
 </div>
 
@@ -52,6 +52,11 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | **Readability in dark mode, app-wide** — every text outside a card now follows the theme (the setup wizard's black-on-navy headline and bullets are white again) | **v0.2.5** |
 | **Modern dashboard** — one gradient command card (brand + live state + start/stop), a 2×2 stat grid, a compact activity feed and a roadmap progress card | **v0.2.5** |
 | **Settings that stay where you left them** — returning from the Permission center or Event log keeps your scroll position | **v0.2.5** |
+| **The 24×7 watcher survives app close and reboot** — `stopWithTask=false`, notification re-asserted on task removal, boot receiver restarts detection, and a one-tap battery-exemption card removes the OEM excuse | **v0.2.6** |
+| **Smooth animations everywhere + an Animations switch (default on)** — tabs, sub-pages, wizard steps, counters and progress bars move with consistent slide + fade; turn it off in Settings for an instant feel | **v0.2.6** |
+| **Modern settings panel** — icon tiles lead every card, the theme choice became a segmented control (System/Light/Dark), a Keep-alive battery card protects the watcher | **v0.2.6** |
+| **About rows open their own pages** — Privacy → PRIVACY.md, License → LICENSE, Build → Releases; plus new Developer and Report-a-bug rows | **v0.2.6** |
+| **Top-bar home button + wizard Skip** — the logo + name always returns to the Dashboard; Skip in the wizard's top-right corner exits an accidental re-run without changing anything | **v0.2.6** |
 | Green CI — the Android workflow survives Windows checkouts (gradlew exec bit) and hardens tag releases | **v0.2.3** |
 | Embedded ADB bridge (no extra app; wireless-debugging pairing on-device) | v0.3.0 (M2.5) |
 | Two-sided cellular call recording through the shell bridge | M3 |
@@ -100,8 +105,8 @@ Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/r
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
 4. **Play Protect may stop the install with "This app can request access to sensitive data."** That warning is automatic for *any* sideloaded app that requests Call Log / Phone permissions — it is a heuristic caution, not a malware verdict (the code is public in this repo and each release lists its SHA-256). Tap **More details → Install anyway (unsafe)** to continue. To stop the prompts for good: Play Store → profile icon → **Play Protect** → ⚙ **Settings** → turn off **Scan apps with Play Protect** (and **Require Play Protect review for apps** on Android 15+). It cannot be avoided in code — see [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md#play-protect-and-sideloading).
-5. **Updating:** from v0.2.0 the release keystore is stable, so v0.2.5 installs in place over v0.2.0–v0.2.4 — nothing to do. The Releases page currently hosts **v0.2.0 and newer** (the 0.1.x pre-releases were removed from GitHub); if you are still on one of those removed pre-release builds, uninstall it once and install v0.2.5 fresh.
-6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.5.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+5. **Updating:** from v0.2.0 the release keystore is stable, so v0.2.6 installs in place over v0.2.0–v0.2.5 — nothing to do. The Releases page currently hosts **v0.2.0 and newer** (the 0.1.x pre-releases were removed from GitHub); if you are still on one of those removed pre-release builds, uninstall it once and install v0.2.6 fresh.
+6. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.2.6.apk SHA256` on Windows). A truncated download is the most common cause of that error.
 7. Some OEM ROMs (MIUI/ColorOS) also block sideloads under "Install via USB" — approve the install when prompted, or enable that toggle in Developer options.
 
 ## Project structure
@@ -119,7 +124,7 @@ oneCR/
 ├── third_party/               pinned native dependencies (added at M5)
 ├── docs/                      architecture, roadmap, compatibility, branding
 │   ├── branding/              logo.svg, logo-flat.svg, PNG exports
-│   └── release-notes/         GitHub release bodies, one file per version
+│   └── release-notes/         the current release's notes (history lives in CHANGELOG.md)
 └── CHANGELOG.md               release history
 ```
 
