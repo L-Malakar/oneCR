@@ -1,5 +1,0 @@
-<resources>
-    <!-- Window background behind the Compose surface; prevents a grey flash
-         before the first frame and matches the brand palette (v0.2.3). -->
-    <color name="onecr_window_background">#F6F8FB</color>
-</resources>
