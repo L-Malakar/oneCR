@@ -99,7 +99,7 @@ class PrivilegeHealthMonitor(
             rebootedSinceLastOk = false
         }
 
-        val (detail, action) = describe(state)
+        val (detail, action) = describe(state, provider.mode)
         val fullDetail = buildString {
             append(detail)
             if (rebootedSinceLastOk && state != PrivilegeState.OK) {
@@ -126,30 +126,34 @@ class PrivilegeHealthMonitor(
         return last >= 0 && last != current
     }
 
-    private fun describe(state: PrivilegeState): Pair<String, PrivilegeAction> =
+    private fun describe(state: PrivilegeState, mode: PrivilegeMode): Pair<String, PrivilegeAction> =
         when (state) {
             PrivilegeState.OK ->
                 "Shell bridge connected (UID 2000). Privileged capture will use it from M3." to PrivilegeAction.NONE
-            PrivilegeState.NOT_CONFIGURED ->
-                "Shizuku is not installed. Install it to enable the privilege bridge." to PrivilegeAction.INSTALL_SHIZUKU
+            PrivilegeState.NOT_CONFIGURED -> when (mode) {
+                PrivilegeMode.EMBEDDED_ADB ->
+                    "No device paired yet — open Wireless debugging and pair with the 6-digit code." to PrivilegeAction.REPAIR
+                else ->
+                    "Shizuku is not installed. Install it to enable the privilege bridge." to PrivilegeAction.INSTALL_SHIZUKU
+            }
             PrivilegeState.NEEDS_PERMISSION ->
                 "Grant oneCR permission inside Shizuku to use the shell bridge." to PrivilegeAction.GRANT_PERMISSION
-            PrivilegeState.PAIRING_LOST ->
-                "Shizuku is installed but not running — open Shizuku and start it." to PrivilegeAction.START_SHIZUKU
+            PrivilegeState.PAIRING_LOST -> when (mode) {
+                PrivilegeMode.EMBEDDED_ADB ->
+                    "Cannot reach adbd — keep Wireless debugging on and the phone on the same Wi-Fi." to PrivilegeAction.REPAIR
+                else ->
+                    "Shizuku is installed but not running — open Shizuku and start it." to PrivilegeAction.START_SHIZUKU
+            }
             PrivilegeState.SERVICE_DEAD ->
                 "The privileged service died (reboot?). Reconnect from Settings." to PrivilegeAction.REPAIR
             PrivilegeState.DEV_OPTIONS_OFF ->
-                "Developer options are off — embedded-ADB mode cannot run." to PrivilegeAction.REPAIR
+                "Developer options (or Wireless debugging) are off — embedded-ADB mode cannot run." to PrivilegeAction.REPAIR
             PrivilegeState.UNSUPPORTED ->
                 "This device/OS combination does not support the bridge." to PrivilegeAction.REPAIR
         }
 
     companion object {
-        /**
-         * True when the OS is new enough for the embedded-ADB bridge (Android 11+,
-         * wireless-debugging pairing). This gate applies to v0.3.0's embedded-ADB
-         * mode ONLY — detection and the Shizuku bridge (v0.2.x) run on Android 8+.
-         */
+        /** True when the OS is new enough for the privileged capture path (Android 11+). */
         fun platformSupported(): Boolean = Build.VERSION.SDK_INT >= 30
     }
 }
