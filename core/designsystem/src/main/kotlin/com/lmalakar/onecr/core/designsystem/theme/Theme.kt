@@ -1,10 +1,12 @@
 package com.lmalakar.onecr.core.designsystem.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 /**
  * v0.2.3: every Material 3 color role is mapped explicitly in both modes.
@@ -89,14 +91,31 @@ private val LightColors = lightColorScheme(
     surfaceTint = TealDeep,
 )
 
+/**
+ * v0.2.5: the theme now also *provides* a content color for the whole tree.
+ *
+ * Compose's `LocalContentColor` defaults to plain `Color.Black`, and every
+ * `Text`/`Icon` that sits outside a `Surface` (and does not set an explicit
+ * color) falls back to that default. In light mode black-on-light looked
+ * correct by accident; in dark mode the setup wizard's headline and bullet
+ * texts, the Dashboard hero title and the sub-page headlines rendered black
+ * on navy — the "black text never turns white" bug reported on v0.2.4.
+ * Providing `onBackground` here fixes every such text app-wide in both modes;
+ * components that draw their own Surface (cards, buttons, bars) still override
+ * it locally with their proper on-colors, exactly as before.
+ */
 @Composable
 fun OneCRTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val scheme = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = scheme,
         typography = AppTypography,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(LocalContentColor provides scheme.onBackground) {
+            content()
+        }
+    }
 }

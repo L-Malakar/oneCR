@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -166,6 +167,12 @@ fun OnboardingScreen(
     val health by privilegeHealth.collectAsState()
     val permissionSnapshot by permissions.collectAsState()
 
+    // v0.2.5 UX: every step starts at the top of its own content. Without this,
+ // the scroll offset carried over from the previous (shorter or longer) step,
+  // so Next could land the user mid-text.
+    val stepScroll = rememberScrollState()
+    LaunchedEffect(step) { stepScroll.scrollTo(0) }
+
     // System back walks the wizard backwards; at the first step the shell's
     // double-back-to-exit confirmation takes over (v0.2.3).
     BackHandler(enabled = step > 0) { step-- }
@@ -201,7 +208,12 @@ fun OnboardingScreen(
                     )
                 }
                 Column {
-                    Text("Set up oneCR", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "Set up oneCR",
+                        style = MaterialTheme.typography.headlineSmall,
+                        // Explicit onBackground: readable in dark and light (v0.2.5).
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
                     Text(
                         "Step ${step + 1} of $STEP_COUNT",
                         style = MaterialTheme.typography.bodySmall,
@@ -219,7 +231,7 @@ fun OnboardingScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(stepScroll)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

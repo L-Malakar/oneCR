@@ -4,6 +4,48 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.2.5] — 2026-11-23
+
+Readability-and-dashboard release: **dark-mode text is finally correct
+everywhere, the Dashboard grew a real visual hierarchy, and Settings keep
+your scroll position.** Fixes the "black text never turns white" bug reported
+on the v0.2.4 setup wizard and every other place the same latent bug hid.
+
+### Added
+- **App-wide content color** (`:core:designsystem`): `OneCRTheme` now
+  provides `LocalContentColor = onBackground` for the whole tree. Compose's
+  default for texts outside a `Surface` is plain black — invisible as a bug
+  in light mode, unreadable on navy in dark mode. One change fixes the setup
+  wizard's headline and bullets, the Dashboard hero title, the Permission
+  center and Event log headlines, and the empty-state titles, in both themes.
+- **Modern Dashboard** (`:app`): the v0.2.2 stack of same-looking status rows
+  became a hierarchy — a gradient **command card** (brand row, live detection
+  state with status dot + LIVE/OFF pill, capability line, Start/Stop and
+  Re-check controls), an **at-a-glance 2×2 stat grid** (calls seen,
+  permissions x/5, events logged, bridge state) with a conditional
+  fix-me banner for degraded bridges, a compact **recent-activity feed**
+  with kind chips and relative timestamps, and a **roadmap card** with a
+  progress bar and next-up highlight.
+- **Developer badge in the README**, between Platform and Version; the README
+  logo now links to the latest release APK (same URL as the Download button).
+
+### Fixed
+- **Settings scroll position reset** (`:feature:settings`): the settings
+  root's scroll state was created inside the root composable, so switching to
+  the Permission center or Event log destroyed it and back navigation snapped
+  to the top. The state is now hoisted above the page switch and saved with
+  `ScrollState.Saver` — the list stays exactly where the user left it, across
+  sub-pages, tab switches and process death.
+- **Wizard steps carried the old scroll offset** (`:feature:onboarding`):
+  advancing to a shorter step could land mid-content; every step now scrolls
+  to its top on entry, and the "Set up oneCR" headline sets an explicit
+  `onBackground` color.
+
+### Changed
+- Version bumped to 0.2.5 (versionCode 9). README download button, version
+  badge and install/update instructions now point at v0.2.5; the feature
+  table gained the v0.2.5 rows.
+
 ## [0.2.4] — 2026-11-22
 
 Theme-and-controls release: **dark mode now follows the app everywhere, the

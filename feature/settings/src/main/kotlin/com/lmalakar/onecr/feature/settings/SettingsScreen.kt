@@ -1,6 +1,7 @@
 package com.lmalakar.onecr.feature.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -93,6 +93,14 @@ fun SettingsScreen(
 ) {
     var page by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
 
+    // v0.2.5: the settings root keeps its scroll position. The scroll state is
+    // owned here — above the page switch — so opening the Permission center or
+    // the Event log (which replaces ROOT in composition) and coming back via
+    // back/gesture no longer snaps the list to the top; it stays exactly where
+    // the user left it. ScrollState.Saver also survives tab switches and process
+    // death.
+    val rootScrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+
     // System back returns from the sub-pages to the settings root instead of
     // leaving the app (v0.2.3).
     BackHandler(enabled = page != SettingsPage.ROOT) { page = SettingsPage.ROOT }
@@ -113,6 +121,7 @@ fun SettingsScreen(
             onRerunOnboarding = onRerunOnboarding,
             onOpenPermissions = { page = SettingsPage.PERMISSIONS },
             onOpenEventLog = { page = SettingsPage.EVENT_LOG },
+            scrollState = rootScrollState,
             modifier = modifier,
         )
 
@@ -152,6 +161,7 @@ private fun RootSettings(
     onRerunOnboarding: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenEventLog: () -> Unit,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     val health by privilegeHealth.collectAsState()
@@ -164,7 +174,7 @@ private fun RootSettings(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
