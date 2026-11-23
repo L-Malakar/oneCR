@@ -1,59 +1,220 @@
 package com.lmalakar.onecr.privilege.embeddedadb
 
+import android.content.Context
+import android.os.Build
+import android.provider.Settings
+import com.lmalakar.onecr.core.common.DispatchersProvider
+import com.lmalakar.onecr.core.model.CaptureSource
 import com.lmalakar.onecr.privilege.api.CaptureCapability
 import com.lmalakar.onecr.privilege.api.PrivilegeMode
 import com.lmalakar.onecr.privilege.api.PrivilegeProvider
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.privilege.api.ShellCommandResult
+import java.io.File
+import kotlinx.coroutines.withContext
 
 /**
- * CallVault-style self-contained provider: oneCR embeds a minimal ADB client that
- * pairs with the phone's own Wireless Debugging (Android 11+ pairing protocol:
- * TLS handshake with a 6-digit code + port from Developer Options), then connects
- * to local adbd and spawns the shell capture dex via `app_process`.
+ * CallVault-style self-contained privilege provider (roadmap M2.5, v0.3.0):
+ * oneCR embeds a minimal ADB client that pairs with the phone's own Wireless
+ * Debugging (Android 11+ pairing protocol: TLS 1.3 + SPAKE2 with the 6-digit
+ * code, port from Developer Options), then talks to the local adbd over TLS and
+ * runs shell commands as UID 2000 — no extra app required.
  *
- * Scoped to v0.3.0 ("M2.5" in the roadmap) so v0.2.0 can ship the Shizuku bridge
- * and the full detection stack first. Implementation plan when it lands:
- *  - pairing: port + code entry UI, TLS pairing socket (SPAKE2-based Android 11+
- *    protocol), persist the granted adb key;
- *  - connect: open the local adbd socket, spawn the capture dex via app_process;
- *  - constraints surfaced in onboarding: pairing needs Wi-Fi once after reboot,
- *    Developer options stay enabled, Android 11 keeps the screen unlocked during
- *    calls, OPPO/OnePlus/Realme need "disable permission monitoring".
+ * Constraints surfaced to the user during onboarding:
+ *  - pairing needs Wireless debugging on + the 6-digit code dialog open;
+ *  - after a reboot the adbd port changes — reconnect discovers it again (Wi-Fi
+ *    must be on once after reboot);
+ *  - Developer options must stay enabled;
+ *  - OPPO/OnePlus/Realme need "disable permission monitoring".
  *
- * Until then this provider stays inert and is never selected by the app.
+ * The capture-dex spawn (app_process) joins in M3; this provider already runs
+ * shell commands, which is exactly the privileged surface capture will use.
  */
-class EmbeddedAdbPrivilegeProvider : PrivilegeProvider {
+class EmbeddedAdbPrivilegeProvider(
+    appContext: Context,
+    private val dispatchers: DispatchersProvider,
+) : PrivilegeProvider {
 
     override val mode: PrivilegeMode = PrivilegeMode.EMBEDDED_ADB
 
     override var onHealthChanged: (() -> Unit)? = null
 
-    override suspend fun connect(): PrivilegeState {
-        // TODO(v0.3.0): TLS pair + adb connect + spawn capture dex.
-        return PrivilegeState.NOT_CONFIGURED
+    private val appContext: Context = appContext.applicationContext
+    private val store = PairingStore(appContext)
+    private val finder = AdbDeviceFinder(appContext)
+    private val filesDir: File = appContext.filesDir
+
+    @Volatile
+    private var client: AdbClient? = null
+
+    // ------------------------------------------------------------------
+    // Public surface used by the UI (onboarding pairing step, settings)
+    // ------------------------------------------------------------------
+
+    /** Discovered pairing endpoints (the phone must show the pairing dialog). */
+    suspend fun discoverPairingServices(): List<PairingEndpoint> =
+        withContext(dispatchers.io) {
+            ensureIdentity()
+            finder.discover(AdbDeviceFinder.Kind.PAIRING)
+                .map { PairingEndpoint(name = it.name, host = it.host, port = it.port) }
+        }
+
+    /**
+     * Pairs with the device at [host]:[port] using the 6-digit [pairingCode].
+     * On success persists the pairing and notifies the health monitor.
+     * Returns a human-readable error, or null on success.
+     */
+    suspend fun pairWithDevice(pairingCode: String, host: String, port: Int): String? =
+        withContext(dispatchers.io) {
+            ensureIdentity()
+            if (pairingCode.length != 6 || pairingCode.any { !it.isDigit() }) {
+                return@withContext "The pairing code is exactly 6 digits."
+            }
+            try {
+                val result = AdbPairingClient(identity!!, host, port, pairingCode).run()
+                store.paired = true
+                store.deviceGuid = result.deviceGuid
+                onHealthChanged?.invoke()
+                null
+            } catch (e: Exception) {
+                onHealthChanged?.invoke()
+                "${e.message ?: "pairing failed"} — wrong code, dialog closed, or wrong port."
+            }
+        }
+
+    /** Data for the onboarding pairing UI. */
+    data class PairingEndpoint(val name: String, val host: String, val port: Int)
+
+    /** True once the user completed pairing (an authorized key is stored on the phone). */
+    val isPaired: Boolean get() = store.paired
+
+    /** Human-readable paired device summary, for the settings card. */
+    fun pairedDeviceSummary(): String? {
+        if (!store.paired) return null
+        val guid = store.deviceGuid
+        return guid?.let { "Paired device: $it" }
+    }
+
+    /** Clears the pairing (does not remove the key on the phone). */
+    fun forgetPairing() {
+        store.clearPairing()
+        runCatching { client?.close() }
+        client = null
+        onHealthChanged?.invoke()
+    }
+
+    // ------------------------------------------------------------------
+    // PrivilegeProvider
+    // ------------------------------------------------------------------
+
+    override suspend fun connect(): PrivilegeState = withContext(dispatchers.io) {
+        if (Build.VERSION.SDK_INT < 30) return@withContext PrivilegeState.UNSUPPORTED
+        if (!devOptionsEnabled()) return@withContext PrivilegeState.DEV_OPTIONS_OFF
+        ensureIdentity()
+        if (!store.paired) return@withContext PrivilegeState.NOT_CONFIGURED
+
+        val active = client
+        if (active != null && active.isAlive()) return@withContext PrivilegeState.OK
+
+        // Preferred: NSD discovery of _adb-tls-connect; fallback: last known port.
+        val endpoints = runCatching {
+            finder.discover(AdbDeviceFinder.Kind.CONNECT, timeoutMs = 3500)
+        }.getOrDefault(emptyList())
+        val candidates = buildList {
+            endpoints.forEach { add(it.host to it.port) }
+            if (store.lastConnectPort > 0) add("127.0.0.1" to store.lastConnectPort)
+        }
+        for ((host, port) in candidates) {
+            val attempt = AdbClient(identity!!, host, port)
+            val ok = runCatching {
+                attempt.connect()
+                true
+            }.getOrElse {
+                runCatching { attempt.close() }
+                false
+            }
+            if (ok) {
+                client = attempt
+                store.lastConnectPort = port
+                return@withContext PrivilegeState.OK
+            }
+        }
+        PrivilegeState.PAIRING_LOST
     }
 
     override suspend fun health(): PrivilegeState {
-        // TODO(v0.3.0): socket liveness + child process liveness + BOOT_COUNT change detection.
-        return PrivilegeState.NOT_CONFIGURED
+        val active = client
+        if (active != null && active.isAlive()) return PrivilegeState.OK
+        return connect()
     }
 
-    override suspend fun runShellCommand(command: String): ShellCommandResult {
-        return ShellCommandResult(
-            command = command,
-            combinedOutput = "embedded-ADB bridge arrives in v0.3.0 — use the Shizuku bridge",
-            exitCode = null,
-            ok = false,
+    override suspend fun runShellCommand(command: String): ShellCommandResult =
+        withContext(dispatchers.io) {
+            val active = client
+            if (active == null || !active.isAlive()) {
+                if (connect() != PrivilegeState.OK) {
+                    return@withContext ShellCommandResult(
+                        command = command,
+                        combinedOutput = "embedded ADB bridge not connected (pair and enable Wireless debugging)",
+                        exitCode = null,
+                        ok = false,
+                    )
+                }
+            }
+            val use = client ?: return@withContext ShellCommandResult(
+                command, "bridge not connected", null, false,
+            )
+            runCatching { use.runShell(command) }
+                .map { ShellCommandResult(command, it.combinedOutput, it.exitCode, it.exitCode == 0) }
+                .getOrElse {
+                    runCatching { use.close() }
+                    client = null
+                    ShellCommandResult(command, "shell failed: ${it.message}", null, false)
+                }
+        }
+
+    override suspend fun probeCapture(): CaptureCapability {
+        // M3: delegates to the shell capture probe() over the same connection.
+        val probe = runShellCommand("id")
+        return CaptureCapability(
+            workingSources = emptyList(),
+            sampleRateHz = 16_000,
+            notes = if (probe.ok) {
+                "Bridge verified (shell reachable as ${probe.combinedOutput.take(60)}); audio source probing arrives in M3."
+            } else {
+                "Bridge not reachable: ${probe.combinedOutput}"
+            },
         )
     }
 
-    override suspend fun probeCapture(): CaptureCapability {
-        // TODO(v0.3.0): delegate to the shell capture service probe().
-        return CaptureCapability(workingSources = emptyList(), sampleRateHz = 16_000)
+    override fun disconnect() {
+        runCatching { client?.close() }
+        client = null
     }
 
-    override fun disconnect() {
-        // TODO(v0.3.0): stop spawned capture process, close adbd socket.
+    // ------------------------------------------------------------------
+    // Internals
+    // ------------------------------------------------------------------
+
+    private var identity: AdbIdentity? = null
+
+    @Synchronized
+    private fun ensureIdentity(): AdbIdentity {
+        identity?.let { return it }
+        val loaded = AdbIdentity.loadOrCreate(filesDir)
+        identity = loaded
+        TlsSupport.installProvider()
+        return loaded
     }
+
+    /** Developer options AND the wireless-debugging switch must both be on. */
+    private fun devOptionsEnabled(): Boolean = runCatching {
+        val adb = Settings.Global.getInt(appContext.contentResolver, Settings.Global.ADB_ENABLED)
+        val wifi = if (Build.VERSION.SDK_INT >= 30) {
+            Settings.Global.getInt(appContext.contentResolver, "adb_wifi_enabled")
+        } else {
+            1
+        }
+        adb == 1 && wifi == 1
+    }.getOrDefault(false)
 }
