@@ -4,288 +4,56 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
-## [0.2.6] — 2026-11-23
+## [0.3.0] — 2026-11-24
 
-Motion-and-survival release: **the 24×7 watcher now truly survives closing
-the app (and reboots), every screen animates with a settings switch, the
-Settings panel got a modern icon-tile look, and About rows all open their own
-pages.**
+Milestone 2.5: **the embedded ADB bridge is real.** oneCR now pairs with the
+phone's own Wireless Debugging (the Android 11+ `adb pair` protocol, implemented
+on-device) — the privilege bridge no longer needs any third-party app. Shizuku
+remains available as a switchable alternative. Still a detection-only build;
+recording arrives in M3.
 
 ### Added
-- **Animations everywhere + Animations switch** (default ON): tabs, settings
-  sub-pages, the notification center, wizard steps, the setup/roadmap
-  progress bars, stat-tile counters and the live status dots all transition
-  with consistent slide + fade motion from a new `:core:designsystem` motion
-  module (`LocalMotionEnabled`). The switch lives in Settings → Appearance;
-  turning it off makes every swap instant. Persisted via
-  `AppSettingsStore.animationsEnabled`.
-- **The 24×7 watcher survives app close and reboot** (`:app`, `:service:detection`):
-  `stopWithTask=false` is explicit on the detection service, `onTaskRemoved`
-  re-asserts the foreground notification and logs
-  "App closed — detection keeps running in the background", and a new
-  `BootReceiver` + `RECEIVE_BOOT_COMPLETED` restarts the watcher seconds
-  after a reboot when autostart was opted in during onboarding.
-- **Battery-optimization protection**: a "Keep alive" card in Settings and a
-  Dashboard banner detect a non-exempted ROM and offer a one-tap
-  `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` request — the last piece the
-  "notification disappears on close" puzzle needed on aggressive OEMs.
-- **About rows open their own pages** (`:feature:settings`): Privacy by
-  design → PRIVACY.md, License → LICENSE, Build → Releases. New **Developer**
-  row (github.com/L-Malakar) and **Report a bug** row
-  (github.com/L-Malakar/oneCR/issues), both one tap away.
-- **Top bar home button** (`:app`): the logo + name block in the top app bar
-  is now tappable and always returns to the Dashboard.
-- **Skip button on the setup wizard** (`:feature:onboarding`): a top-right
-  Skip on every step leaves the wizard without changing any setting — built
-  for accidental "Re-run the setup wizard" taps.
+- **Embedded ADB privilege bridge** (`:privilege:embedded-adb`): a minimal
+  on-device adb client that pairs with this phone's Wireless Debugging using the
+  exact AOSP protocol — TLS 1.3 with client certificates, 64 bytes of RFC 5705
+  keying material (label `adb-label\0`) mixed into the SPAKE2 password, SPAKE2
+  over edwards25519 (BoringSSL variant), AES-128-GCM PeerInfo exchange, and the
+  classic adb public-key line (android_pubkey encoding) exported to the device.
+- **Local adb client**: TLS 1.3 + `CNXN` handshake and the `shell,v2:` service
+  with stdout/stderr/exit-code frames, ACK semantics and stale-connection
+  reconnect; `runShellCommand` runs as UID 2000 with no extra app.
+- **Wireless-debugging discovery**: mDNS/NSD discovery of `_adb-tls-pairing` and
+  `_adb-tls-connect` services so the pairing port is found automatically; the
+  last known port is kept as a fallback.
+- **Privilege mode picker**: choose embedded ADB or Shizuku during onboarding or
+  in Settings; the choice persists and switches the live health monitor. The
+  setup wizard's bridge step shows per-mode guidance (pairing code + port UI for
+  embedded ADB, install/start/grant/verify for Shizuku).
+- **Wizard Skip button on re-run only**: the setup wizard offers Skip (top
+  right) exclusively when re-run from Settings — first launches walk through
+  setup to avoid accidental skips.
+- **Unit tests**: SPAKE2 cross-validated against an independent Python
+  reference implementation (deterministic vectors, both roles), RFC 5869 HKDF
+  vectors, AES-128-GCM cipher vectors, X.509 + android_pubkey structure tests,
+  and end-to-end TLS pairing/shell sessions against mock servers — 24/24 green.
+- Bundled **Conscrypt** (BoringSSL) so `SSL_export_keying_material` is available
+  on-device; the APK grows to ~9.5 MB with per-ABI native TLS libraries.
 
 ### Changed
-- **Settings panel restyle**: rounded icon tiles lead every card, the theme
-  choice became a three-way segmented control (System / Light / Dark with
-  icons), the Privilege bridge tile colors by health state, and cards use a
-  softer 16 dp corner radius.
-- **`docs/release-notes/` now keeps only the current release's notes**; the
-  old per-version files were removed (the full history lives in
-  CHANGELOG.md).
+- Manifest gains `INTERNET` — used exclusively for local TLS sockets to the
+  phone's own adbd (and, in M5, model downloads); oneCR still sends nothing
+  anywhere.
+- README overhauled (download button, embedded-ADB setup guide, FAQ, developer
+  section); release-notes folder now keeps only the latest version's file.
+- Version bumped to 0.3.0 (versionCode 5).
 
-## [0.2.5] — 2026-11-23
-
-Readability-and-dashboard release: **dark-mode text is finally correct
-everywhere, the Dashboard grew a real visual hierarchy, and Settings keep
-your scroll position.** Fixes the "black text never turns white" bug reported
-on the v0.2.4 setup wizard and every other place the same latent bug hid.
-
-### Added
-- **App-wide content color** (`:core:designsystem`): `OneCRTheme` now
-  provides `LocalContentColor = onBackground` for the whole tree. Compose's
-  default for texts outside a `Surface` is plain black — invisible as a bug
-  in light mode, unreadable on navy in dark mode. One change fixes the setup
-  wizard's headline and bullets, the Dashboard hero title, the Permission
-  center and Event log headlines, and the empty-state titles, in both themes.
-- **Modern Dashboard** (`:app`): the v0.2.2 stack of same-looking status rows
-  became a hierarchy — a gradient **command card** (brand row, live detection
-  state with status dot + LIVE/OFF pill, capability line, Start/Stop and
-  Re-check controls), an **at-a-glance 2×2 stat grid** (calls seen,
-  permissions x/5, events logged, bridge state) with a conditional
-  fix-me banner for degraded bridges, a compact **recent-activity feed**
-  with kind chips and relative timestamps, and a **roadmap card** with a
-  progress bar and next-up highlight.
-- **Developer badge in the README**, between Platform and Version; the README
-  logo now links to the latest release APK (same URL as the Download button).
-
-### Fixed
-- **Settings scroll position reset** (`:feature:settings`): the settings
-  root's scroll state was created inside the root composable, so switching to
-  the Permission center or Event log destroyed it and back navigation snapped
-  to the top. The state is now hoisted above the page switch and saved with
-  `ScrollState.Saver` — the list stays exactly where the user left it, across
-  sub-pages, tab switches and process death.
-- **Wizard steps carried the old scroll offset** (`:feature:onboarding`):
-  advancing to a shorter step could land mid-content; every step now scrolls
-  to its top on entry, and the "Set up oneCR" headline sets an explicit
-  `onBackground` color.
-
-### Changed
-- Version bumped to 0.2.5 (versionCode 9). README download button, version
-  badge and install/update instructions now point at v0.2.5; the feature
-  table gained the v0.2.5 rows.
-
-## [0.2.4] — 2026-11-22
-
-Theme-and-controls release: **dark mode now follows the app everywhere, the
-notification center has a real top bar, and the setup wizard's buttons are
-pinned to the bottom.** Fixes the three dark-mode bugs reported on v0.2.3
-(black panel title on navy, missing panel top bar, light-only setup wizard)
-and shifts the UI further towards icons over prose.
-
-### Added
-- **Icon-driven UI** (`:app`, `:feature:*`): `material-icons-extended` joins
-  the classpath (R8 strips unused icons; the release APK stays small). The
-  setup wizard shows a per-step header icon and distinct permission-task
-  icons (call log = history, notification access = active bell, battery =
-  charging); Dashboard's Start/Stop detection buttons carry play/stop
-  glyphs; theme choices get system-contrast / moon / sun icons; the guided
-  permission flow, "Clear log" and the About rows grew leading icons, with a
-  chevron on the Project home row.
-- **Aliyun Maven mirror** (`settings.gradle.kts`): consulted before Maven
-  Central for third-party artifacts because Central's HTTP 429 rate limiting
-  aborted first-time builds on some IPs. Central remains the canonical
-  fallback; CI behavior is unchanged.
-
-### Fixed
-- **Notification center title stayed black in dark mode** (`:app`): the
-  hand-rolled header drew its title with the ambient content color, which
-  defaults to black outside a Surface — black on navy. The header is now a
-  real Material 3 `TopAppBar` (surface container, `onSurface` title, bell
-  glyph, live status line, "Mark read" action) plus a divider under it —
-  which also delivers the long-requested **top bar for the notification
-  panel** (no bottom bar, as before).
-- **"Set up oneCR" ignored the dark theme** (`:app`, `:core:model`): the
-  Compose palette followed the theme setting, but the platform layer — the
-  window background the transparent wizard draws on top of, system bars and
-  platform dialogs — kept following the OS. The host activity is now an
-  `AppCompatActivity` on a `Theme.AppCompat.DayNight` theme, and the
-  persisted theme mode is synced through `AppCompatDelegate.setDefaultNightMode()`
-  on app start and on every change, so **Dark pins dark everywhere, Light
-  pins light, System follows the OS**. Every screen root additionally paints
-  `colorScheme.background`, so no translucent surface can leak the light
-  window underneath (onboarding, dashboard, settings root, permission
-  center, event log, library).
-- **Setup wizard buttons drifted with content** (`:feature:onboarding`): the
-  Next/Back/Finish row was part of the scrollable column, so its position
-  moved with each step's text length. The wizard is now a three-region
-  column — fixed header (step icon + title + progress), scrollable step
-  content, and a **fixed bottom bar** that always sits at the screen edge.
-  Back and Finish gained arrow/check icons; the header/status/nav bar
-  insets are handled by the screen itself since it renders without the
-  shell's Scaffold.
-
-### Changed
-- Version bumped to 0.2.4 (versionCode 8). The GitHub Releases page hosts
-  **v0.2.0 and newer** — the 0.1.x pre-releases were removed from the page;
-  README and release notes now point new installs at v0.2.4 and describe the
-  one-time uninstall path only for upgrades from those removed pre-releases.
-
-## [0.2.3] — 2026-11-22
-
-Polish release: **back navigation that behaves, a fixed dark theme, a
-redesigned About screen and green CI.** System back now walks the user's
-screen history (notification center → opener, settings sub-pages → root,
-previous tab) and only exits after a second press at the root confirms it.
-The Material 3 scheme maps every color role in both modes, so dialogs, menus,
-switches and text fields finally match the navy palette in dark mode.
-
-### Added
-- **Back navigation with exit confirmation** (`:app`, `:feature:*`): a shell
-  `BackHandler` coordinates a visited-tab history (`Dashboard ⇄ Library ⇄
-  Settings`), the notification center and the onboarding wizard intercept back
-  first via their own handlers, and the exit needs a second press within
-  ~2.2 s ("Press back again to exit"). Sub-pages return to the settings root;
-  the guided permission flow returns to its overview first. Tab history is
-  `rememberSaveable`, so it survives process death; a persisted-but-renamed
-  tab name now falls back to Dashboard instead of crashing.
-- **Complete Material 3 color scheme** (`:core:designsystem`): both
-  `darkColorScheme` and `lightColorScheme` now map every role — tertiary,
-  errorContainer/onErrorContainer, outline/outlineVariant, inverse*,
-  surfaceTint, scrim and all `surfaceContainer*` elevations. The dark
-  `secondary` is a light slate (the old value was near-black on navy), light
-  `primary` is a deeper teal for AA-contrast buttons, the warning tone uses a
-  themed amber container pair, and the badge ink is a named token.
-- **Themed window background** (`:app` res): `values`/`values-night`
-  `onecr_window_background` colors remove the grey launch flash before the
-  first Compose frame.
-- **Redesigned About section** (`:feature:settings`): gradient brand header
-  (logo, tagline, version/build chips), icon rows for Project home (deep-links
-  to GitHub), Privacy by design, License and exact build, plus a setup-wizard
-  button — all scheme-driven, no hardcoded colors.
-- **CI fixes** (`.github/workflows/android.yml`): `chmod +x gradlew` after
-  checkout in both jobs (Windows checkouts lose the exec bit → every Linux
-  build failed with exit code 126 `Permission denied`), a concurrency group
-  that cancels superseded runs, and a release-notes fallback so tagging without
-  a notes file can no longer fail the publish step. `gradlew` ships with mode
-  755 in the source archive; CONTRIBUTING.md documents the permanent
-  `git update-index --chmod=+x gradlew` fix.
-
-### Fixed
-- **Notification center showed every error twice** — once under *Errors* and
-  again under *Recent activity*. The activity feed now excludes error events;
-  pinned by a new unit test (7 notification tests total).
-- **Dashboard "Recent events" order** — the three latest events listed
-  oldest-first; now newest-first like every other feed.
-- Hardcoded `Color(0xFF14181F)` badge text and amber warning icon moved into
-  the theme (`BadgeInk`, `tertiaryContainer`); dead imports and an unused
-  local removed in `SettingsScreen`/`OneCRApp`.
-
-## [0.2.2] — 2026-11-22
-
-UX release: **a professional shell for the app — top bar + notification center,
-one-by-one permission wizard.** Every screen now has a branded top app bar with a
-notification bell (top-right); the bell opens a notification center that collects
-everything the app needs, every error, and the activity log in one feed with an
-unread badge. Permissions are no longer bundled: each tap asks for exactly one
-thing.
-
-### Added
-- **Top app bar with notification center** (`:app`): a Material 3 `TopAppBar`
-  (logo + current tab + version) on all main screens; the bell in the top-right
-  shows an amber unread badge counting needs + errors + unseen activity, and
-  opens the new **Notifications** page. The center has three sections:
-  *Needs attention* (missing permissions with one-tap grant buttons, detection
-  off with a start button, bridge repair), *Errors* (the new error event stream),
-  and *Recent activity* (the event log as a feed). Opening it marks everything
-  read; "Mark read" resets the badge.
-- **Notification center model** (`:app/notify`): pure, unit-tested
-  `NotificationItems.build()` composes the feed from the permission snapshot,
-  bridge health, detection-running flag and event log; unread math
-  (needs + errors + activity after last-seen, errors never double-counted)
-  is pinned by 6 new unit tests. `NotificationCenter` combines the live flows;
-  `notification_last_seen` persisted via `AppSettingsStore`.
-- **One-by-one permission wizard** (`:feature:onboarding` + `:feature:settings`):
-  the onboarding Permissions step was rewritten — each permission is a card,
-  the active one is highlighted and its **Allow …** button fires exactly one
-  system dialog per tap, then the next card activates (phone → call log →
-  notifications (13+) → notification access → battery). The Permission center
-  gains the same experience as **Guided setup**: "Step X of Y" with the
-  rationale in front of every ask, per-item skip and exit.
-- **Permission snapshot** (`core/model`): new pure `PermissionSnapshot`
-  (phone / call log / notifications / listener / battery) published as a
-  `StateFlow` by the app module and refreshed on activity resume and after
-  every grant — replaces the old per-screen `refresh` counter hack, so every
-  screen (wizard, permission center, notification center) updates reactively.
-
-### Changed
-- **UI polish:** `SectionHeader` (uppercase label) groups the Dashboard
-  (Live status / Activity / Roadmap) and Settings (Appearance / Privilege
-  bridge / Permissions and diagnostics / Coming next / About); the Dashboard
-  hero carries a version chip and the Start/Stop buttons now reflect the real
-  service state via the new observable `DetectionEngine.running` StateFlow;
-  the nav bar and top bar are pinned to the theme surface color (the baseline
-  grey `surfaceContainer` clashed with the navy palette); `StatusCard` gained
-  semantic icon tones (PRIMARY / WARNING / NEUTRAL); roadmap icons no longer
-  imply pending items are problems.
-- **Error surface:** `EventLogEntry.KIND_ERROR` added; the detection service
-  logs errors when the engine is missing, `startForeground` fails (and stops
-  itself instead of being killed), or the engine throws — previously all of
-  these failed silently. The Event log renders error entries with an
-  error-colored badge; the notification center lists the last 10.
-
-### Fixed
-- Onboarding "Ready" step said "oneCR v0.2.0" regardless of the actual
-  version — now injected from `AppInfo`.
-- Event log list could collapse on small screens (`LazyColumn` now gets the
-  remaining height via `weight(1f)`).
-- Notification center badge math counts each error exactly once.
-
-## [0.2.1] — 2026-11-22
-
-Polish release: **theme setting + low-end device support.** The app now follows
-the phone's dark-mode setting by default and can be pinned to Light or Dark from
-Settings. Low-end devices get fewer idle wakeups and a smaller resource table,
-and the docs/onboarding now state plainly that oneCR installs and detects on
-Android 8+ (only the v0.3.0 embedded-ADB bridge will need 11+).
-
-### Added
-- **Theme setting** (`core/model` + `data/files` + `feature/settings`): new
-  `ThemeMode` enum (SYSTEM / LIGHT / DARK, default SYSTEM) persisted through
-  `AppSettingsStore`; an *Appearance* card in Settings with radio options;
-  `AppContainer.themeMode` mirrors the preference as Compose state so a change
-  recomposes the whole tree instantly and survives restarts.
-- **`ThemeModeTest`** (`core/model`): 3 unit tests pinning the persistence
-  contract (round-trip of storage keys, SYSTEM fallback for unknown values).
-
-### Changed
-- **Low-end optimizations:** on `ActivityManager.isLowRamDevice` devices the
-  privilege health ping interval extends from 30 s to 2 min (binder-death
-  callbacks remain instant); `resourceConfigurations` strips the ~40 unused
-  AndroidX locales from the APK; docs now note the APK is universal
-  (arm64-v8a / armeabi-v7a / x86 / x86_64) so 32-bit Android 8 phones install it.
-- **Android 8+ messaging corrected:** README tagline, badges, onboarding
-  Device-step text and `docs/COMPATIBILITY.md` now say detection + the Shizuku
-  bridge run on Android 8+; the 11+ floor belongs to the v0.3.0 embedded-ADB
-  mode only (comment on `PrivilegeHealthMonitor.platformSupported` updated).
-  No behavioral gate changed — the runtime fallbacks
-  (`PhoneStateListener` on API 26–30, `TelephonyCallback` on 31+,
-  FGS type on 34+, `POST_NOTIFICATIONS` on 33+) were already in place.
+### Known limitations
+- Real-device pairing needs field validation (the protocol layer is covered by
+  cross-implementation tests, but OEM adbd builds may differ) — report results
+  in docs/COMPATIBILITY.md.
+- No audio capture yet (M3); `probeCapture()` is still a stub.
+- After a reboot the embedded bridge reconnects only once Wireless debugging is
+  reachable over Wi-Fi again.
 
 ## [0.2.0] — 2026-11-22
 
