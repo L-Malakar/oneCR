@@ -16,7 +16,6 @@ data class EventLogEntry(
         const val KIND_VOIP = "voip"
         const val KIND_PRIVILEGE = "privilege"
         const val KIND_SERVICE = "service"
-        const val KIND_ERROR = "error"
         const val KIND_DEBUG = "debug"
     }
 }
