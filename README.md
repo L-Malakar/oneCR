@@ -5,8 +5,6 @@
   <img src="docs/branding/logo.svg" width="128" alt="oneCR logo" />
 </a>
 
-Git test (temp)
-
 # oneCR
 
 **Local-first, privacy-focused call recorder for Android 8+ with on-device AI transcription and summarization.**
