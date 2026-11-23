@@ -61,11 +61,6 @@ class DetectionEngine(
     private val _recentEvents = MutableStateFlow<List<EventLogEntry>>(emptyList())
     val recentEvents: StateFlow<List<EventLogEntry>> = _recentEvents.asStateFlow()
 
-    /** Observable running flag — the Dashboard Start/Stop buttons and the
-     *  notification center "detection is off" item key off this (v0.2.2). */
-    private val _running = MutableStateFlow(false)
-    val running: StateFlow<Boolean> = _running.asStateFlow()
-
     /** True when the VoIP half is at least partially functional (notification access). */
     private val _capabilities = MutableStateFlow(DetectionCapabilities())
     val capabilities: StateFlow<DetectionCapabilities> = _capabilities.asStateFlow()
@@ -79,7 +74,7 @@ class DetectionEngine(
     private var notificationCollector: Job? = null
 
     @Volatile
-    private var started = false
+    private var running = false
 
     data class DetectionCapabilities(
         val cellular: Boolean = false,
@@ -96,19 +91,13 @@ class DetectionEngine(
 
     /** Starts detection. Returns the capability set (false flags = missing permission). */
     fun start(): DetectionCapabilities {
-        if (started) return _capabilities.value
-        started = true
-        _running.value = true
+        if (running) return _capabilities.value
+        running = true
         _recentEvents.value = eventLog.loadRecent(RECENT_LIMIT)
 
-        // Startup failures are logged as error events so the notification center
-        // surfaces them instead of the service failing silently (v0.2.2).
-        val cellularOk = runCatching { startCellular() }
-            .getOrElse { logError("Cellular detector failed to start: ${it.message}"); false }
-        val voipAudioOk = runCatching { startVoipAudio() }
-            .getOrElse { logError("VoIP audio watcher failed to start: ${it.message}"); false }
-        val voipNotificationsOk = runCatching { startVoipNotifications() }
-            .getOrElse { logError("VoIP notification listener failed to start: ${it.message}"); false }
+        val cellularOk = startCellular()
+        val voipAudioOk = startVoipAudio()
+        val voipNotificationsOk = startVoipNotifications()
 
         _capabilities.value = DetectionCapabilities(
             cellular = cellularOk,
@@ -134,9 +123,8 @@ class DetectionEngine(
     }
 
     fun stop() {
-        if (!started) return
-        started = false
-        _running.value = false
+        if (!running) return
+        running = false
         ticker?.cancel(); ticker = null
         notificationCollector?.cancel(); notificationCollector = null
         cellularDetector?.stop(); cellularDetector = null
@@ -147,7 +135,7 @@ class DetectionEngine(
         log(EventLogEntry.KIND_SERVICE, "Detection stopped")
     }
 
-    val isRunning: Boolean get() = started
+    val isRunning: Boolean get() = running
 
     /** Clears the persisted + in-memory event log (Settings → Event log → Clear). */
     fun clearLog() {
@@ -308,16 +296,6 @@ class DetectionEngine(
         logger.d(TAG, "$kind: $message")
         eventLog.append(entry)
         _recentEvents.value = (_recentEvents.value + entry).takeLast(RECENT_LIMIT)
-    }
-
-    /** Logs an error event visible in the notification center and the event log. */
-    fun logError(message: String) {
-        log(EventLogEntry.KIND_ERROR, message)
-    }
-
-    /** Logs a service-lifecycle event (v0.2.6) — e.g. the app task being closed. */
-    fun logService(message: String) {
-        log(EventLogEntry.KIND_SERVICE, message)
     }
 
     // ------------------------------------------------------------------
