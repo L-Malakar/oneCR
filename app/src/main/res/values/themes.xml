@@ -1,14 +1,3 @@
 <resources>
-    <!--
-        v0.2.4: the theme is now an AppCompat DayNight theme. The platform
-        night mode is driven by the app's theme setting (System / Light / Dark)
-        through AppCompatDelegate.setDefaultNightMode(), so the window
-        background, system bars and any platform dialogs finally follow the
-        in-app choice instead of only the OS setting.
-    -->
-    <style name="Theme.oneCR" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <item name="android:windowBackground">@color/onecr_window_background</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-    </style>
+    <style name="Theme.oneCR" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
