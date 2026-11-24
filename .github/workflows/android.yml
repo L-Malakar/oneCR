@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Cancel superseded runs on the same branch — saves minutes on every push.
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build and test
@@ -13,6 +18,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # gradlew must carry the executable bit in git (100755). Repos pushed from
+      # Windows often lose it, and the runner then fails every build with
+      # "./gradlew: Permission denied" (exit code 126). chmod here is the belt;
+      # `git update-index --chmod=+x gradlew` (see CONTRIBUTING.md) is the
+      # suspenders that fixes it for every future checkout.
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -23,7 +36,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Tests first: fail fast before spending time on packaging.
+      # Tests first: fail fast before spending time on packaging (v0.3.0).
       - name: Unit tests
         run: ./gradlew test --stacktrace
 
@@ -60,6 +73,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -69,19 +85,21 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Guard: release notes for this tag must exist
-        run: |
-          VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
-          test -f "docs/release-notes/v${VERSION}.md" || {
-            echo "docs/release-notes/v${VERSION}.md is missing — add it before tagging."; exit 1;
-          }
-
       - name: Read version from gradle.properties
         id: version
         run: echo "name=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
 
       - name: Build release APK
         run: ./gradlew assembleRelease --stacktrace
+
+      # Guard: the release notes for this tag must exist before we publish
+      # (v0.3.0) — no silent placeholder bodies on GitHub Releases.
+      - name: Guard: release notes for this tag must exist
+        run: |
+          VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
+          test -f "docs/release-notes/v${VERSION}.md" || {
+            echo "docs/release-notes/v${VERSION}.md is missing — add it before tagging."; exit 1;
+          }
 
       - name: Rename and checksum
         run: |
