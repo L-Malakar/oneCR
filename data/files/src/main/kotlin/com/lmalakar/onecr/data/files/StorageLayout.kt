@@ -30,6 +30,8 @@ object StorageLayout {
     const val UPLINK_STREAM = "uplink.wav"
     const val MIC_STREAM = "mic.wav"
     const val PLAYBACK_STREAM = "playback.wav"
+    /** v0.3.2: single mixed telephony stream (VOICE_CALL shell capture). */
+    const val CALL_STREAM = "call.wav"
     const val FINAL_WAV = "audio.wav"
     const val FINAL_AAC = "audio.m4a"
 
