@@ -26,6 +26,15 @@ class AppSettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_DETECTION_AUTOSTART, false)
         set(value) = prefs.edit().putBoolean(KEY_DETECTION_AUTOSTART, value).apply()
 
+    /**
+     * v0.3.2 (M3): start a shell recording automatically when a cellular call
+     * is detected. ON by default — that is the entire point of a call recorder —
+     * and the Dashboard "Record now" button works regardless of this setting.
+     */
+    var autoRecordEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RECORD, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RECORD, value).apply()
+
     /** Theme preference; SYSTEM (follow the OS) is the default. */
     var themeMode: ThemeMode
         get() = ThemeMode.fromStorageKey(prefs.getString(KEY_THEME_MODE, null))
@@ -52,6 +61,7 @@ class AppSettingsStore(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_completed"
         const val KEY_PRIVILEGE_MODE = "privilege_mode"
         const val KEY_DETECTION_AUTOSTART = "detection_autostart"
+        const val KEY_AUTO_RECORD = "auto_record_enabled"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
         const val KEY_NOTIFICATION_LAST_SEEN = "notification_last_seen"
