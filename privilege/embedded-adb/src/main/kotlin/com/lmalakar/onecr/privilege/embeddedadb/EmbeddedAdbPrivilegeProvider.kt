@@ -6,6 +6,9 @@ import android.provider.Settings
 import com.lmalakar.onecr.core.common.DispatchersProvider
 import com.lmalakar.onecr.core.model.CaptureSource
 import com.lmalakar.onecr.privilege.api.CaptureCapability
+import com.lmalakar.onecr.privilege.api.CaptureProtocol
+import com.lmalakar.onecr.privilege.api.CaptureStream
+import com.lmalakar.onecr.privilege.api.CaptureStreamSpec
 import com.lmalakar.onecr.privilege.api.PrivilegeMode
 import com.lmalakar.onecr.privilege.api.PrivilegeProvider
 import com.lmalakar.onecr.privilege.api.PrivilegeState
@@ -46,6 +49,10 @@ class EmbeddedAdbPrivilegeProvider(
 
     @Volatile
     private var client: AdbClient? = null
+
+    /** Endpoint the live client connected to — reused for the PCM stream session. */
+    @Volatile
+    private var lastEndpoint: Pair<String, Int>? = null
 
     // ------------------------------------------------------------------
     // Public surface used by the UI (onboarding pairing step, settings)
@@ -135,6 +142,7 @@ class EmbeddedAdbPrivilegeProvider(
             }
             if (ok) {
                 client = attempt
+                lastEndpoint = host to port
                 store.lastConnectPort = port
                 return@withContext PrivilegeState.OK
             }
@@ -173,24 +181,71 @@ class EmbeddedAdbPrivilegeProvider(
                 }
         }
 
-    override suspend fun probeCapture(): CaptureCapability {
-        // M3: delegates to the shell capture probe() over the same connection.
-        val probe = runShellCommand("id")
-        return CaptureCapability(
-            workingSources = emptyList(),
-            sampleRateHz = 16_000,
-            notes = if (probe.ok) {
-                "Bridge verified (shell reachable as ${probe.combinedOutput.take(60)}); audio source probing arrives in M3."
-            } else {
-                "Bridge not reachable: ${probe.combinedOutput}"
+    override fun disconnect() {
+        runCatching { client?.close() }
+        client = null
+        lastEndpoint = null
+    }
+
+    // ------------------------------------------------------------------
+    // Capture (M3)
+    // ------------------------------------------------------------------
+
+    /** Path of oneCR's own APK — the CLASSPATH the capture dex is spawned from. */
+    private fun apkPath(): String = appContext.applicationInfo.sourceDir ?: appContext.packageCodePath
+
+    override suspend fun probeCapture(): CaptureCapability = withContext(dispatchers.io) {
+        val probe = runShellCommand(CaptureProtocol.probeCommand(apkPath()))
+        if (!probe.ok) {
+            return@withContext CaptureCapability(
+                workingSources = emptyList(),
+                sampleRateHz = 16_000,
+                notes = "Probe failed: ${probe.combinedOutput.take(160)}",
+            )
+        }
+        val result = CaptureProtocol.parseProbeOutput(probe.combinedOutput)
+        val chain = CaptureProtocol.workingSources(result)
+        val rate = CaptureProtocol.workingSampleRate(result)
+        val uid = result.uid
+        CaptureCapability(
+            workingSources = chain,
+            sampleRateHz = rate,
+            notes = buildString {
+                append("uid=$uid (shell)")
+                if (chain.isEmpty()) {
+                    append("; no working source — device may route nothing into the")
+                    append(" telephony streams (see docs/COMPATIBILITY.md)")
+                } else {
+                    append("; chain: ")
+                    append(chain.joinToString("→") { it.name })
+                }
             },
         )
     }
 
-    override fun disconnect() {
-        runCatching { client?.close() }
-        client = null
-    }
+    override suspend fun openCaptureStream(spec: CaptureStreamSpec): CaptureStream =
+        withContext(dispatchers.io) {
+            if (connect() != PrivilegeState.OK) {
+                throw java.io.IOException(
+                    "embedded ADB bridge not connected (pair and enable Wireless debugging)",
+                )
+            }
+            val endpoint = lastEndpoint
+                ?: throw java.io.IOException("bridge endpoint unknown — reconnect first")
+            // A dedicated TLS session carries the PCM; the main command client
+            // (health pings, shell checks) stays untouched.
+            AdbStreamClient(
+                identity = identity ?: throw java.io.IOException("bridge identity missing"),
+                host = endpoint.first,
+                port = endpoint.second,
+                command = CaptureProtocol.startCommand(
+                    apkPath = apkPath(),
+                    source = spec.source,
+                    sampleRateHz = spec.sampleRateHz,
+                    maxDurationMs = spec.maxDurationMs,
+                ),
+            )
+        }
 
     // ------------------------------------------------------------------
     // Internals
