@@ -19,9 +19,21 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/** Semantic color of a [StatusCard] icon chip. */
+enum class StatusTone {
+    /** Brand teal — normal / healthy. */
+    PRIMARY,
+
+    /** Amber — degraded, worth attention (e.g. bridge lost). */
+    WARNING,
+
+    /** Neutral grey — informational / future milestone. */
+    NEUTRAL,
+}
+
 /**
  * Status tile used on the Dashboard: an icon, a title, the current value,
- * a supporting explanation and an optional milestone badge (e.g. "M3").
+ * a supporting explanation and an optional badge (e.g. "LIVE" or "M3").
  */
 @Composable
 fun StatusCard(
@@ -31,6 +43,8 @@ fun StatusCard(
     icon: ImageVector,
     badge: String? = null,
     modifier: Modifier = Modifier,
+    iconTone: StatusTone = StatusTone.PRIMARY,
+    valueColor: androidx.compose.ui.graphics.Color? = null,
 ) {
     ElevatedCard(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -38,9 +52,22 @@ fun StatusCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val (chipColor, iconTint) = when (iconTone) {
+                StatusTone.PRIMARY ->
+                    MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+
+                // Themed amber family (v0.2.3): the warning tone now uses the
+                // scheme's tertiaryContainer instead of a hardcoded amber that
+                // lacked contrast on the light container backgrounds.
+                StatusTone.WARNING ->
+                    MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+
+                StatusTone.NEUTRAL ->
+                    MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+            }
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
+                color = chipColor,
             ) {
                 Icon(
                     imageVector = icon,
@@ -48,7 +75,7 @@ fun StatusCard(
                     modifier = Modifier
                         .padding(10.dp)
                         .size(24.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    tint = iconTint,
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -61,6 +88,7 @@ fun StatusCard(
                     text = value,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    color = valueColor ?: MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = supportingText,
