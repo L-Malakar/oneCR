@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- v0.2.6: restart the 24×7 call watcher after a reboot (only when the
+         user opted in during onboarding). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!--
         Embedded ADB bridge (M2.5): local TCP sockets to this phone's own adbd
         (wireless debugging TLS). Never used for any network/cloud traffic —
@@ -73,15 +77,30 @@
         <!--
             Detection foreground service (M2). specialUse with an honest sub-type;
             the microphone/mediaProjection-typed recorder service replaces this in M3.
+
+            v0.2.6: stopWithTask=false is explicit — closing/swiping the app away
+            never stops the watcher; onTaskRemoved re-asserts its notification and
+            BootReceiver restarts it after a reboot.
         -->
         <service
             android:name="com.lmalakar.onecr.service.detection.CallDetectionService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="call_state_detection_for_user_initiated_recording" />
         </service>
+
+        <!-- v0.2.6: 24×7 watcher auto-restart after boot (opt-in during onboarding). -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- VoIP heuristic input (1): ongoing call notifications from allowlisted apps. -->
         <service
