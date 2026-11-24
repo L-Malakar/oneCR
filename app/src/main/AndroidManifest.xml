@@ -5,7 +5,9 @@
         M2 permission set + the M2.5 embedded-ADB bridge. Every permission is
         requested in context and can be declined — the related feature simply
         stays off (see PRIVACY.md). RECORD_AUDIO and the projection consent
-        dialog arrive with capture (M3).
+        dialog arrive with in-app capture (M3 step 2): the v0.3.2 shell capture
+        runs in the privileged UID-2000 process, which holds its own audio
+        permissions — the app process does not record audio itself.
     -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
@@ -90,6 +92,23 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="call_state_detection_for_user_initiated_recording" />
+        </service>
+
+        <!--
+            Recording foreground service (M3, v0.3.2): shows the live "Recording"
+            notification with a Stop action while the shell capture session runs.
+            specialUse again — the app process itself never opens the mic (the
+            privileged capture process does), so the microphone FGS type and its
+            Android 14 while-in-use restrictions do not apply here; the type
+            becomes microphone/mediaProjection with the in-app VoIP mix (M3 step 2).
+        -->
+        <service
+            android:name="com.lmalakar.onecr.service.recorder.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="shell_capture_call_recording_notification" />
         </service>
 
         <!-- v0.2.6: 24×7 watcher auto-restart after boot (opt-in during onboarding). -->
