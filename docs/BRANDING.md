@@ -1,6 +1,10 @@
 # Branding
 
-App name: **oneCR** · version: **0.1.1** · package: `com.lmalakar.onecr`
+App name: **oneCR** · package: `com.lmalakar.onecr`
+
+The version lives in exactly one place — `gradle.properties` (`VERSION_NAME`,
+consumed by `:app/build.gradle.kts` and `build.bat`) — so this file no longer
+pins one.
 
 ## The logo
 
@@ -57,7 +61,27 @@ Brand palette (from the logo):
 | White | `#FFFFFF` | wordmark, glyph layer |
 
 The in-app Material 3 theme stays dark-first (a recording app is used in-call,
-at night): background `#0B1220`, primary `#14B8A6` (teal), secondary slate
-`#334155`, amber `#F59E0B` for warnings. Brand red/green are reserved for
-branding surfaces (logo, icons, headers) and recording-state accents so the
-functional palette stays calm; the light scheme is provided but secondary.
+at night). Since v0.2.3 the scheme maps **every** Material 3 role, so dialogs,
+menus, switches and text fields match the navy palette instead of Material's
+baseline purple-grey. Key tokens:
+
+| Role (dark) | Value | Role (light) | Value |
+|---|---|---|---|
+| background / surface | `#0B1220` / `#101A2C` | background / surface | `#F6F8FB` / `#FFFFFF` |
+| primary | `#2DD4BF` (bright teal) | primary | `#0F766E` (deep teal, AA on white) |
+| primaryContainer / on | `#0E3A36` / `#9AF0E5` | primaryContainer / on | `#9AF0E5` / `#0F766E` |
+| secondary | `#B6C2D9` (light slate) | secondary | `#334155` (slate) |
+| secondaryContainer / on | `#233047` / `#D7E3F4` | secondaryContainer / on | `#D8E2F1` / `#233047` |
+| tertiaryContainer / on (amber) | `#3D2D06` / `#FBBF24` | tertiaryContainer / on | `#FFE3AE` / `#6E4A00` |
+| outline / outlineVariant | `#5B6B87` / `#28374F` | outline / outlineVariant | `#6B7A94` / `#D5DCE8` |
+| surfaceContainer (low → high) | `#131D30` … `#1C2841` | surfaceContainer (low → high) | `#F0F3F8` … `#E9EDF4` |
+| error | `#F87171` on `#4A1A1E` | error | `#B3261E` on `#F9DEDC` |
+
+Support tokens: `#F59E0B` (AmberAccent, the top-bar badge), `#14181F`
+(BadgeInk — text on the amber badge), window background `#0B1220` (night) /
+`#F6F8FB` (light) via `onecr_window_background`. Brand red/green are reserved
+for branding surfaces (logo, icons, headers) and recording-state accents so
+the functional palette stays calm; the light scheme is provided but secondary.
+The full token list lives in
+`core/designsystem/.../theme/Color.kt` — add new colors there, never inline
+hex values in screens.
