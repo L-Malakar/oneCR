@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -55,6 +57,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,9 +81,12 @@ import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
 import com.lmalakar.onecr.service.detection.LiveCallState
+import com.lmalakar.onecr.service.recorder.RecordingEngine
+import com.lmalakar.onecr.service.recorder.RecordingJournal
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private data class MilestoneRow(val milestone: String, val title: String, val done: Boolean)
 
@@ -88,7 +94,8 @@ private val MILESTONES = listOf(
     MilestoneRow("M1", "Repo skeleton, build.bat, Compose shell", done = true),
     MilestoneRow("M2", "Privilege bridge (Shizuku) + call detection", done = true),
     MilestoneRow("M2.5", "Embedded ADB bridge — no extra app needed", done = true),
-    MilestoneRow("M3", "Audio capture engine (cellular + VoIP)", done = false),
+    MilestoneRow("M3.1", "Shell capture dex + recorder service (v0.3.2)", done = true),
+    MilestoneRow("M3", "Audio capture — VoIP mix + dual streams (next M3 step)", done = false),
     MilestoneRow("M4", "Library, storage, search, export", done = false),
     MilestoneRow("M5", "On-device AI (whisper.cpp + llama.cpp)", done = false),
 )
@@ -117,6 +124,9 @@ fun DashboardScreen(
     val recentEvents by container.detection.recentEvents.collectAsState()
     val running by container.detection.running.collectAsState()
     val permissionSnapshot by container.permissions.collectAsState()
+    // M3 (v0.3.2): live recorder state drives the manual record control.
+    val recorderState by container.recorder.state.collectAsState()
+    val recordScope = rememberCoroutineScope()
 
     fun startDetection() {
         runCatching {
@@ -134,6 +144,25 @@ fun DashboardScreen(
                 Intent(context, CallDetectionService::class.java)
                     .setAction(DetectionContract.ACTION_STOP),
             )
+        }
+    }
+
+    fun toggleRecording() {
+        when (recorderState) {
+            is RecordingEngine.UiState.Recording -> container.recorder.stop()
+            is RecordingEngine.UiState.Finalizing -> container.recorder.stop()
+
+            else -> recordScope.launch {
+                container.recorder
+                    .start(RecordingJournal.TRIGGER_MANUAL)
+                    .onFailure { failure ->
+                        Toast.makeText(
+                            context,
+                            "Could not start recording: ${failure.message}",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+            }
         }
     }
 
@@ -159,9 +188,11 @@ fun DashboardScreen(
             running = running,
             callState = callState,
             capabilitiesText = if (running) detectionCapabilityText(capabilities) else null,
+            recorderState = recorderState,
             onStart = { startDetection() },
             onStop = { stopDetection() },
             onRecheck = { container.privilegeMonitor.refreshAsync() },
+            onRecordToggle = { toggleRecording() },
         )
 
         // ---------------- At a glance ------------------------------------------
@@ -317,6 +348,7 @@ fun DashboardScreen(
 /**
  * The dashboard's hero: a gradient brand header, the live detection state as
  * the biggest element on the page, and the Start/Stop controls right under it.
+ * v0.3.2 adds the M3 recording row: live recording status + Record now/Stop.
  */
 @Composable
 private fun CommandCard(
@@ -324,9 +356,11 @@ private fun CommandCard(
     running: Boolean,
     callState: LiveCallState,
     capabilitiesText: String?,
+    recorderState: RecordingEngine.UiState,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRecheck: () -> Unit,
+    onRecordToggle: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -441,6 +475,73 @@ private fun CommandCard(
                         Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.size(6.dp))
                         Text("Re-check bridge")
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // ---- Recording row (M3, v0.3.2) ----
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val recordingLive = recorderState is RecordingEngine.UiState.Recording
+                    val motionRec = LocalMotionEnabled.current
+                    val recPulse = motionPulseAlpha(motionRec)
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .graphicsLayer { alpha = if (recordingLive) recPulse else 1f }
+                            .clip(CircleShape)
+                            .background(
+                                if (recordingLive) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            ),
+                    )
+                    Spacer(modifier = Modifier.size(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = when (recorderState) {
+                                is RecordingEngine.UiState.Recording -> "Recording"
+                                is RecordingEngine.UiState.Finalizing -> "Saving recording…"
+                                is RecordingEngine.UiState.Failed -> "Recording failed"
+                                RecordingEngine.UiState.Idle -> "Recorder ready"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = when (recorderState) {
+                                is RecordingEngine.UiState.Recording ->
+                                    "${recorderState.source.name.lowercase().replace('_', ' ')}" +
+                                        (recorderState.phone?.let { " · $it" } ?: "")
+
+                                is RecordingEngine.UiState.Failed -> recorderState.message
+                                else -> "Manual record works anytime; auto-record follows a detected call."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    val recordingLive = recorderState is RecordingEngine.UiState.Recording ||
+                        recorderState is RecordingEngine.UiState.Finalizing
+                    if (recordingLive) {
+                        Button(onClick = onRecordToggle, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text("Stop recording")
+                        }
+                    } else {
+                        OutlinedButton(onClick = onRecordToggle, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text("Record now")
+                        }
                     }
                 }
             }
@@ -759,7 +860,7 @@ private fun RoadmapCard() {
                 }
             }
             Text(
-                text = "Next up — M3: two-sided call capture through the shell bridge this dashboard already watches.",
+                text = "Next up — M3 step 2: VoIP capture (MediaProjection mix) and dual downlink/uplink streams over the shell bridge.",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -789,5 +890,5 @@ private fun detectionCapabilityText(
     append(if (caps.cellular) "active" else "off (grant Phone permission)")
     append("; VoIP detection ")
     append(if (caps.anyVoip) "active" else "off (enable notification access)")
-    append(". Recording arrives in M3.")
+    append(". Recording follows a call when auto-record is on.")
 }
