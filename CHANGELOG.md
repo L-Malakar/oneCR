@@ -4,6 +4,63 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.3.2] — 2026-11-24
+
+M3 step 1 — the capture engine. oneCR records cellular calls for the first
+time: the privilege bridge spawns a minimal capture process (`CaptureMain`,
+shipped inside the APK, spawned via `app_process` as UID 2000) that streams
+the telephony audio into a WAV file while the app wraps it with a
+crash-recovery journal. This release also fixes the CI workflow YAML that had
+rejected every push since v0.3.0.
+
+### Added
+- **Shell capture process** (`:service:recorder` → `capture/CaptureMain`):
+  framework-only entry point with two subcommands — `probe` (opens every
+  privileged source × rate for ~400 ms and prints a machine-readable report:
+  which sources return real audio / open-but-silent / fail) and `start`
+  (raw PCM s16-LE mono on stdout, diagnostics on stderr, clean stop via a
+  `stop` line on stdin or a `--max-ms` guard). Runs as the adb-shell user,
+  which holds `CAPTURE_AUDIO_OUTPUT` — no root needed.
+- **Streaming shell channel** (`AdbStreamClient`): a second dedicated TLS
+  session to the phone's adbd carries only the PCM stream, so health pings
+  and shell checks keep flowing on the main bridge while audio streams.
+  The shared adb packet codec moved to `AdbWire` (behavior unchanged).
+- **Capture contract in `:privilege:api`**: `CaptureProtocol` (command
+  builder + probe parser + fallback-chain composer), `CaptureStream` /
+  `CaptureStreamSpec`, and the new `PrivilegeProvider.openCaptureStream` —
+  implemented for embedded ADB (second TLS session) and Shizuku (new AIDL
+  `openCaptureStream` returning a PCM pipe over binder; user-service version
+  bumped to 3 so Shizuku re-loads the dex).
+- **Recorder service** (`:service:recorder`): `RecordingEngine` (single
+  active session, probe-driven source fallback VOICE_CALL → MIC, WAV writer
+  with patched RIFF sizes, journal statuses
+  recording/recovered/finalized/failed), `RecordingJournal` (atomic k=v
+  journal + `sweepOrphans` that recovers sessions killed mid-call), and
+  `RecordingService` — a specialUse foreground notification with a live
+  chronometer and a Stop action.
+- **Auto-record on detected cellular calls** (Settings switch, default ON)
+  wired to the detection engine's live call state; manual recordings survive
+  the call ending, auto ones stop with it.
+- **Dashboard: Record now / Stop recording** in the command card with a live
+  recording row (source + number while recording; failure messages surface
+  as toasts).
+- **Settings → Capture (M3) card**: recorder state, auto-record switch and
+  the audio-probe button with the resulting fallback chain, rate and notes.
+- **CI recovery file**: the workflow fix ships in the source tree
+  (see `Fixed`).
+
+### Fixed
+- **The GitHub Actions workflow was rejected at startup on every push since
+  v0.3.0** — the release-notes guard step's name contained an unquoted
+  colon (`- name: Guard: release notes …`), a YAML syntax error, so GitHub
+  logged "Invalid workflow file … line 97" and every run failed with zero
+  jobs (build #25–#27 included). The name is now quoted, with a comment so
+  it never regresses.
+
+### Changed
+- Version bumped to 0.3.2 (versionCode 12); tests grew from the protocol
+  suite to **74 green** (probe parser, WAV writer and journal included).
+
 ## [0.3.1] — 2026-11-24
 
 The UI/UX restoration release. **v0.3.0 accidentally shipped an older UI
