@@ -17,5 +17,5 @@ tasks.withType<KotlinCompile>().configureEach {
 }
 
 dependencies {
-    
+    testImplementation(libs.junit)
 }
