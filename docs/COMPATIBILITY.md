@@ -50,6 +50,18 @@ oneCR is distributed as a signed APK from GitHub Releases — not through the Pl
 | Aggressive OEMs (MIUI, OxygenOS, One UI, etc.) | Background killers can interrupt the recorder | Exclude oneCR from battery optimization, enable auto-launch |
 | WhatsApp | VoIP capture depends on WhatsApp not opting out of playback capture; a future update could change this | oneCR detects silent far-end and falls back to mic + loudspeaker |
 
+## Capture (v0.3.2) — how the probe reads
+
+Before trusting a device, run **Settings → Capture → Run audio probe**. It opens every privileged source for a moment and prints one of three verdicts per source × rate:
+
+- **OK** — the source opened and returned real samples: the recorder can use it.
+- **SILENT** — the source opened (the OEM accepts it) but routed nothing into it. oneCR treats this as "not usable" and keeps probing for a fallback; this is the classic OEM quirk (some VoLTE phones accept VOICE_CALL and never feed it).
+- **FAIL** — the open itself failed; the error is in the probe notes.
+
+The recorder follows the working chain (VOICE_CALL → downlink+uplink (dual, next step) → mic). If nothing works, recording fails with a clear event-log entry instead of producing empty files.
+
+Where the audio goes: each session creates `recordings/<uuid>/raw/<stream>.wav` in the app's private storage with a `journal.json` beside it. If the phone dies mid-call, the next start sweeps the orphan and marks it `recovered` — the captured audio is kept.
+
 ## Tested devices
 
 | Device | Android | Privilege mode | Cellular VOICE_CALL | VoIP (WhatsApp) | Notes | Tester |
