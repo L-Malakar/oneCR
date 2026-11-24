@@ -94,7 +94,11 @@ jobs:
 
       # Guard: the release notes for this tag must exist before we publish
       # (v0.3.0) — no silent placeholder bodies on GitHub Releases.
-      - name: Guard: release notes for this tag must exist
+      # NOTE (v0.3.2): the step NAME is quoted — an unquoted inner colon
+      # (`name: Guard: …`) is a YAML syntax error and GitHub rejects the whole
+      # workflow at startup ("Invalid workflow file … line 97", run fails with
+      # zero jobs). This was the CI outage every push since v0.3.0.
+      - name: "Guard: release notes for this tag must exist"
         run: |
           VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
           test -f "docs/release-notes/v${VERSION}.md" || {
