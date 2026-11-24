@@ -27,14 +27,25 @@ Status legend: [ ] planned, [~] in progress, [x] done.
 - [x] `:priv-adb`: wireless-debugging pairing protocol + local adb client — **shipped in M2.5 (v0.3.0)**
 - [ ] Exit criteria: reliable labeled call events on the test device; graceful degradation when privileges drop (needs owner device testing)
 
+## M2.x — App shell polish (v0.2.1–v0.2.3)
+- [x] Light / Dark / System theme with persisted choice, SYSTEM default (v0.2.1)
+- [x] Low-end device accommodations: health-ping interval doubled on low-RAM devices, Android 8.0 install floor kept (v0.2.1)
+- [x] Branded top app bar + notification bell, in-app notification center (needs / errors / activity, unread badge) (v0.2.2)
+- [x] One-by-one permission wizard in onboarding + guided setup in Permission center (v0.2.2)
+- [x] Back navigation: visited-tab history, back intercepts in notification center / settings sub-pages / onboarding, double-press exit confirmation (v0.2.3)
+- [x] Full Material 3 color mapping in dark & light (no baseline fallbacks), themed window background, themed warning tone (v0.2.3)
+- [x] Redesigned About section: gradient brand header, facts rows, setup shortcut (v0.2.3)
+- [x] Feed fixes: errors no longer duplicated in activity; dashboard events newest-first; new unit test (v0.2.3)
+- [x] CI green: gradlew exec-bit fix (exit 126), run concurrency, release-notes fallback (v0.2.3)
+- [ ] Verified on a real device (owner)
+
 ## M2.5 — Embedded ADB bridge (v0.3.0)
 - [x] Wireless-debugging pairing protocol (TLS 1.3 + SPAKE2 + 6-digit code) on-device (v0.3.0)
 - [x] Local adb client: TLS connect to own adbd + CNXN + shell service (`shell,v2:` with exit codes) (v0.3.0)
 - [x] adb key persistence, NSD discovery of pairing/connect services, Developer-options guard, Wi-Fi-after-reboot UX (v0.3.0)
 - [x] Privilege mode picker in Settings + onboarding (Shizuku ↔ embedded ADB) (v0.3.0)
 - [x] Protocol test coverage: SPAKE2 vs independent reference, HKDF RFC vectors, TLS pairing + shell e2e mocks (v0.3.0)
-- [ ] Exit criteria: pairing + shell verified on the owner's device across OEMs (field journal in docs/COMPATIBILITY.md)
-- [ ] `app_process` capture-dex spawn hooks (delegates to the M3 shell capture dex once it exists)
+- [x] v0.3.1: the v0.2.6 UI/UX layer restored on top of the bridge (the v0.3.0 build had shipped an older UI base); versionCode regression fixed
 
 ## M3 — Audio capture engine
 - [ ] Shell capture dex (`probe`/`start`/`stop`, PCM over pipe FD)
