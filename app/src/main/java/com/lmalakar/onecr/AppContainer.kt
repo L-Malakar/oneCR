@@ -25,8 +25,11 @@ import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
 import com.lmalakar.onecr.service.detection.CallerIdResolver
 import com.lmalakar.onecr.service.detection.DetectionEngine
 import com.lmalakar.onecr.service.detection.DetectionServiceHost
+import com.lmalakar.onecr.service.recorder.RecorderServiceHost
+import com.lmalakar.onecr.service.recorder.RecordingEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 /** Logcat-backed Logger (kept out of core:common so that module stays pure JVM). */
@@ -114,6 +117,20 @@ class AppContainer(appContext: Context) {
         eventLog = eventLog,
     )
 
+    // ---- Recorder (M3, v0.3.2) ----
+    // The provider lambda is live: switching the privilege mode mid-session is
+    // picked up by the next capture session without rebuilding the engine.
+    val recorder = RecordingEngine(
+        appContext = appContext,
+        dispatchers = dispatchers,
+        time = SystemTimeProvider(),
+        logger = logger,
+        eventLog = eventLog,
+        provider = { privilegeProvider },
+        autoRecordEnabled = { settings.autoRecordEnabled },
+        scope = appScope,
+    )
+
     // ---- Appearance (v0.2.1) ----
     /** Compose-observable mirror of [AppSettingsStore.themeMode]; SYSTEM by default. */
     val themeMode = mutableStateOf(settings.themeMode)
@@ -193,7 +210,37 @@ class AppContainer(appContext: Context) {
 
     init {
         DetectionServiceHost.engineProvider = { detection }
+        RecorderServiceHost.engineProvider = { recorder }
         privilegeMonitor.start()
+        // M3 auto capture: detected cellular call start/end drives the shell
+        // recorder (when the user left auto-record on). VoIP events route
+        // through the same hook — the engine records what the probe says the
+        // device can capture.
+        appScope.launch {
+            detection.callState.collect { state ->
+                when (state) {
+                    is com.lmalakar.onecr.service.detection.LiveCallState.CellularActive ->
+                        recorder.onCallStateChanged(
+                            callActive = true,
+                            direction = state.direction,
+                            phone = state.number,
+                        )
+
+                    is com.lmalakar.onecr.service.detection.LiveCallState.VoipActive ->
+                        recorder.onCallStateChanged(
+                            callActive = true,
+                            direction = com.lmalakar.onecr.core.model.CallDirection.VOIP,
+                            phone = null,
+                        )
+
+                    else -> recorder.onCallStateChanged(
+                        callActive = false,
+                        direction = com.lmalakar.onecr.core.model.CallDirection.UNKNOWN,
+                        phone = null,
+                    )
+                }
+            }
+        }
     }
 
     private fun isLowRamDevice(context: Context): Boolean =
