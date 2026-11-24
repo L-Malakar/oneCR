@@ -7,6 +7,13 @@
 -keep class com.lmalakar.onecr.privilege.shizuku.IShellService { *; }
 -keep class com.lmalakar.onecr.privilege.shizuku.IShellService$* { *; }
 
+# Shell capture process (M3, v0.3.2): CaptureMain is spawned via app_process
+# with this APK on the CLASSPATH and reached ONLY by reflection from the
+# native launcher (`app_process / com.lmalakar.onecr.…CaptureMain …`) — R8
+# would strip it without an explicit keep and every capture would die with
+# ClassNotFound.
+-keep class com.lmalakar.onecr.service.recorder.capture.** { *; }
+
 # Bundled Conscrypt (embedded ADB bridge, M2.5): the TLS stack is a JNI +
 # reflection-heavy library; keep it whole so the pairing/connect handshakes
 # and SSL_export_keying_material survive shrinking.
