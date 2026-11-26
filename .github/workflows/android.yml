@@ -3,6 +3,13 @@ name: Android CI
 on:
   push:
     branches: [ main ]
+    # v0.3.3 fix: the `release` job below guards on tag refs and `needs: build`
+    # — but without a tags filter, pushing a tag never started the build job,
+    # so the release job was skipped forever (the "workflow not working" bug).
+    # Tags like "0.3.3" (this repo's convention) and "v0.3.3" both trigger now.
+    tags:
+      - 'v*'
+      - '*.*.*'
   pull_request:
   workflow_dispatch:
 
@@ -94,11 +101,7 @@ jobs:
 
       # Guard: the release notes for this tag must exist before we publish
       # (v0.3.0) — no silent placeholder bodies on GitHub Releases.
-      # NOTE (v0.3.2): the step NAME is quoted — an unquoted inner colon
-      # (`name: Guard: …`) is a YAML syntax error and GitHub rejects the whole
-      # workflow at startup ("Invalid workflow file … line 97", run fails with
-      # zero jobs). This was the CI outage every push since v0.3.0.
-      - name: "Guard: release notes for this tag must exist"
+      - name: Guard: release notes for this tag must exist
         run: |
           VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
           test -f "docs/release-notes/v${VERSION}.md" || {
