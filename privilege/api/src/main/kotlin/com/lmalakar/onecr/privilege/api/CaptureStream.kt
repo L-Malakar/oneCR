@@ -1,42 +1,45 @@
 package com.lmalakar.onecr.privilege.api
 
 import com.lmalakar.onecr.core.model.CaptureSource
-import java.io.Closeable
 import java.io.InputStream
 
-/** Parameters for one shell capture session (M3). */
+/**
+ * Request for one capture stream (M3). The opener may resolve the request to
+ * a different [CaptureSource] than asked — the probe/fallback chain runs
+ * inside the opener — so callers must read the granted values from the
+ * returned [CaptureStream] instead of assuming the request was honored.
+ */
 data class CaptureStreamSpec(
-    /** Audio source the capture process opens as UID 2000. */
+    /** Preferred source; the opener falls back down the chain when blocked. */
     val source: CaptureSource,
 
-    /** Requested sample rate; the probe result is the usual source of truth. */
+    /** Preferred sample rate; the device grants what its HAL supports. */
     val sampleRateHz: Int = 16_000,
-
-    /**
-     * Hard safety stop — a stuck capture process must never record forever.
-     * Default 2 h: no call runs longer, and the engine stops the stream on
-     * call end anyway.
-     */
-    val maxDurationMs: Long = 2 * 60 * 60 * 1000L,
 )
 
 /**
- * A live PCM stream from the privileged capture process.
+ * One live PCM capture stream (M3, v0.3.3 in-process implementation).
  *
- * `pcm` carries RAW 16-bit little-endian mono samples at [CaptureStreamSpec.sampleRateHz].
- * [stop] is best-effort and non-blocking: it writes the control word and closes
- * the control channel; the process then finishes its WAV-side handshake and exits.
- * [awaitExit] lets the caller reap the exit code (null = closed without one).
+ * `pcm` is a blocking [InputStream]: `read()` returns only when audio bytes
+ * are available, `-1` once the stream is stopped/closed (or the source died).
+ * The recorder engine pumps this into a [com.lmalakar.onecr.service.recorder.WavWriter]
+ * on its own thread. `stop()` ends capture and closes the pipe; `close()` is
+ * an alias kept for AutoCloseable-style use.
  */
-interface CaptureStream : Closeable {
-    val pcm: InputStream
+interface CaptureStream : AutoCloseable {
 
-    /** Sample rate actually granted (the device may differ from the request). */
+    /** The source actually granted (may differ from the requested one). */
+    val source: CaptureSource
+
+    /** Sample rate the device actually granted for this stream. */
     val grantedSampleRateHz: Int
 
-    /** Sends the stop control. Safe to call more than once. */
+    /** Blocking PCM (s16 LE) byte stream fed by the capture pump thread. */
+    val pcm: InputStream
+
+    /** End the capture: the pump thread stops and the pipe closes (read → -1). */
     fun stop()
 
-    /** Blocks until the capture process exits or [timeoutMs] elapses. */
-    fun awaitExit(timeoutMs: Long): Int?
+    /** Alias of [stop] for try-with-resources style callers. */
+    override fun close() = stop()
 }
