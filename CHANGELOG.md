@@ -4,62 +4,74 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
-## [0.3.2] — 2026-11-24
+## [0.3.3] — 2026-11-26
 
-M3 step 1 — the capture engine. oneCR records cellular calls for the first
-time: the privilege bridge spawns a minimal capture process (`CaptureMain`,
-shipped inside the APK, spawned via `app_process` as UID 2000) that streams
-the telephony audio into a WAV file while the app wraps it with a
-crash-recovery journal. This release also fixes the CI workflow YAML that had
-rejected every push since v0.3.0.
+Two headline features: **the M3 capture engine's first step is real** (record
+now / auto-record through a probe-verified fallback chain into WAV), and the
+**in-app update checker** (GitHub Releases → notification → full-screen update
+page → permission → download → SHA-256 verify → auto-install). Also fixes the
+GitHub Actions release workflow, which could never publish from a tag.
 
 ### Added
-- **Shell capture process** (`:service:recorder` → `capture/CaptureMain`):
-  framework-only entry point with two subcommands — `probe` (opens every
-  privileged source × rate for ~400 ms and prints a machine-readable report:
-  which sources return real audio / open-but-silent / fail) and `start`
-  (raw PCM s16-LE mono on stdout, diagnostics on stderr, clean stop via a
-  `stop` line on stdin or a `--max-ms` guard). Runs as the adb-shell user,
-  which holds `CAPTURE_AUDIO_OUTPUT` — no root needed.
-- **Streaming shell channel** (`AdbStreamClient`): a second dedicated TLS
-  session to the phone's adbd carries only the PCM stream, so health pings
-  and shell checks keep flowing on the main bridge while audio streams.
-  The shared adb packet codec moved to `AdbWire` (behavior unchanged).
-- **Capture contract in `:privilege:api`**: `CaptureProtocol` (command
-  builder + probe parser + fallback-chain composer), `CaptureStream` /
-  `CaptureStreamSpec`, and the new `PrivilegeProvider.openCaptureStream` —
-  implemented for embedded ADB (second TLS session) and Shizuku (new AIDL
-  `openCaptureStream` returning a PCM pipe over binder; user-service version
-  bumped to 3 so Shizuku re-loads the dex).
-- **Recorder service** (`:service:recorder`): `RecordingEngine` (single
-  active session, probe-driven source fallback VOICE_CALL → MIC, WAV writer
-  with patched RIFF sizes, journal statuses
-  recording/recovered/finalized/failed), `RecordingJournal` (atomic k=v
-  journal + `sweepOrphans` that recovers sessions killed mid-call), and
-  `RecordingService` — a specialUse foreground notification with a live
-  chronometer and a Stop action.
-- **Auto-record on detected cellular calls** (Settings switch, default ON)
-  wired to the detection engine's live call state; manual recordings survive
-  the call ending, auto ones stop with it.
-- **Dashboard: Record now / Stop recording** in the command card with a live
-  recording row (source + number while recording; failure messages surface
-  as toasts).
-- **Settings → Capture (M3) card**: recorder state, auto-record switch and
-  the audio-probe button with the resulting fallback chain, rate and notes.
-- **CI recovery file**: the workflow fix ships in the source tree
-  (see `Fixed`).
-
-### Fixed
-- **The GitHub Actions workflow was rejected at startup on every push since
-  v0.3.0** — the release-notes guard step's name contained an unquoted
-  colon (`- name: Guard: release notes …`), a YAML syntax error, so GitHub
-  logged "Invalid workflow file … line 97" and every run failed with zero
-  jobs (build #25–#27 included). The name is now quoted, with a comment so
-  it never regresses.
+- **Capture engine step 1 (M3)**:
+  - `CaptureStream` contract in `:privilege:api` (blocking PCM pipe, granted
+    source + rate) and a streaming **WavWriter** (canonical 44-byte header,
+    sizes patched on stop, idempotent finish) with unit tests.
+  - In-process capture opener with a probe-verified fallback chain — VOICE_CALL
+    (silence-verified: Android 11+ feeds zeros to normal apps on many OEMs) →
+    microphone — so the recorder never writes an empty file silently.
+  - **RecordingEngine** wired end-to-end: journal updated with the granted
+    source/rate, crash-recovery journal + orphan sweep (now also patches the
+    orphaned WAV header in place), event-log entries, Dashboard-facing states.
+  - **Recording foreground service** (`foregroundServiceType="microphone"`)
+    with a Stop action; it stops itself when the engine returns to Idle.
+  - **Dashboard capture card** with the live state and a "Record now" button
+    (mic permission requested in context); **Settings → Capture (M3)** with the
+    auto-record switch (default OFF) and the capture probe card.
+- **Update checker (v0.3.3)**:
+  - One-URL GitHub Releases check on app open, throttled to once per hour,
+    with a generic "oneCR-update-check" User-Agent (nothing identifying).
+  - "New version available" notification: tap anywhere → the app opens on the
+    update page; expanded view shows the release notes with **Update** and
+    **Cancel** action buttons; Cancel snoozes reminders for that version for
+    24 h (a newer release overrides the snooze).
+  - Full-screen **update page above everything** (separate dialog window, so
+    it floats over the dashboard, wizard and notification center): big version
+    banner, cleaned release notes, size, "View on GitHub".
+  - Update flow: per-app **"Install unknown apps"** grant requested at the
+    moment of the Update tap → APK download with live progress → **SHA-256
+    verified against the release's SHA256SUMS.txt** → system installer opens
+    automatically (relaunched safely if the app was backgrounded mid-download).
+  - "Check for updates" row in About → Settings; version comparison is
+    component-numeric and unit-tested.
 
 ### Changed
-- Version bumped to 0.3.2 (versionCode 12); tests grew from the protocol
-  suite to **74 green** (probe parser, WAV writer and journal included).
+- Manifest gains `RECORD_AUDIO`, `FOREGROUND_SERVICE_MICROPHONE` and
+  `REQUEST_INSTALL_PACKAGES` — each requested in context (probe/record and the
+  Update tap respectively); a FileProvider hands the downloaded APK to the
+  installer without any storage permission.
+- MainActivity is `singleTop` so the update notification re-enters the
+  existing task and lands on the update page.
+- Version bumped to 0.3.3 (versionCode 12).
+
+### Fixed
+- **GitHub Actions release workflow**: tag pushes (`0.3.3`, `v0.3.3`) did not
+  trigger the `build` job (branches-only filter), so the tag-gated `release`
+  job was skipped forever — tagged releases could never publish. The workflow
+  now triggers on tags too.
+- Restored two embedded-ADB protocol files lost from the source tree
+  (`PairingCipher`, `PairingStore`) and the HKDF/PAIRINGKEY test vectors; the
+  full TLS 1.3 + SPAKE2 + AES-128-GCM pairing end-to-end mock re-verifies the
+  reconstructed protocol (all 68 tests green).
+
+### Known limitations
+- In-app capture uses the app-uid AudioRecord path: on Android 11+ most OEMs
+  silence VOICE_CALL for third-party apps, so recordings fall back to the
+  microphone (near end, far end via speakerphone). The shell capture dex —
+  the privileged telephony mix every device grants — is the next M3 step.
+- Auto-record starts the capture while the call is already active (app may be
+  backgrounded); some Android 14 ROMs gate background microphone starts — use
+  Record-now from the Dashboard if a device refuses auto-start.
 
 ## [0.3.1] — 2026-11-24
 
