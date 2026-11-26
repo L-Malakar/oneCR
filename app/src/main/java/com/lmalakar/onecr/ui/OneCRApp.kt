@@ -80,6 +80,8 @@ import com.lmalakar.onecr.service.detection.DetectionContract
 import com.lmalakar.onecr.ui.dashboard.DashboardScreen
 import com.lmalakar.onecr.ui.notifications.NotificationCenterScreen
 import com.lmalakar.onecr.ui.update.UpdateScreen
+import com.lmalakar.onecr.feature.settings.UpdateCheckUi
+import com.lmalakar.onecr.update.ManualCheck
 
 /** Model imports kept off the hot path; icons come from material-icons-core. */
 private enum class TopLevelTab(val label: String, val icon: ImageVector) {
@@ -146,6 +148,12 @@ fun OneCRApp(container: AppContainer) {
     var showNotificationCenter by rememberSaveable { mutableStateOf(false) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     val notificationModel by container.notificationCenter.model.collectAsState()
+
+    // Update state is collected once at the shell level: the update page reads
+    // it at the bottom of the composition, and the About page's manual
+    // "Check for updates" row reads it here (v0.3.5).
+    val updateInfo by container.updateCoordinator.available.collectAsState()
+    val updateManualCheck by container.updateCoordinator.manualCheck.collectAsState()
 
     // Visited-tab history (most recent last, never contains the current tab).
     var tabHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
@@ -483,6 +491,15 @@ fun OneCRApp(container: AppContainer) {
                 showOnboarding = true
             },
             onBack = { showAbout = false },
+            updateAvailableVersion = updateInfo?.versionName,
+            updateCheck = when (val mc = updateManualCheck) {
+                ManualCheck.Checking -> UpdateCheckUi(checking = true)
+                ManualCheck.UpToDate -> UpdateCheckUi(upToDate = true)
+                is ManualCheck.Failed -> UpdateCheckUi(failed = true)
+                ManualCheck.Idle -> UpdateCheckUi()
+            },
+            onCheckForUpdates = { container.updateCoordinator.checkNow() },
+            onOpenUpdatePage = { container.updateCoordinator.showPageIfAvailable() },
             modifier = Modifier.fillMaxSize(),
         )
     }
@@ -492,7 +509,6 @@ fun OneCRApp(container: AppContainer) {
     // the notification center, About. It is composed LAST on purpose:
     // Compose draws later siblings on top, and an update outranks whatever
     // screen is showing — including the wizard.
-    val updateInfo by container.updateCoordinator.available.collectAsState()
     val updatePageVisible by container.updateCoordinator.pageVisible.collectAsState()
     val updateDownload by container.updateCoordinator.download.collectAsState()
     val motionUpdate = LocalMotionEnabled.current
