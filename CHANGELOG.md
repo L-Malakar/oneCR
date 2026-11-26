@@ -4,74 +4,73 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
-## [0.3.3] — 2026-11-26
+## [0.3.4] — 2026-11-26
 
-Two headline features: **the M3 capture engine's first step is real** (record
-now / auto-record through a probe-verified fallback chain into WAV), and the
-**in-app update checker** (GitHub Releases → notification → full-screen update
-page → permission → download → SHA-256 verify → auto-install). Also fixes the
-GitHub Actions release workflow, which could never publish from a tag.
+The updater release, plus the About page the Settings list always wanted to
+shed. oneCR can now see its own GitHub releases and walk the user through an
+install end to end; About moved out of Settings into a standalone page behind
+a new ⓘ icon; the whole UI got a minimal-copy pass; and the first tested
+M3 foundations (WAV writer + recording journal) landed. This release also
+folds in the CI robustness work and the v0.3.3 update-system request that
+never made it out of the build machine.
 
 ### Added
-- **Capture engine step 1 (M3)**:
-  - `CaptureStream` contract in `:privilege:api` (blocking PCM pipe, granted
-    source + rate) and a streaming **WavWriter** (canonical 44-byte header,
-    sizes patched on stop, idempotent finish) with unit tests.
-  - In-process capture opener with a probe-verified fallback chain — VOICE_CALL
-    (silence-verified: Android 11+ feeds zeros to normal apps on many OEMs) →
-    microphone — so the recorder never writes an empty file silently.
-  - **RecordingEngine** wired end-to-end: journal updated with the granted
-    source/rate, crash-recovery journal + orphan sweep (now also patches the
-    orphaned WAV header in place), event-log entries, Dashboard-facing states.
-  - **Recording foreground service** (`foregroundServiceType="microphone"`)
-    with a Stop action; it stops itself when the engine returns to Idle.
-  - **Dashboard capture card** with the live state and a "Record now" button
-    (mic permission requested in context); **Settings → Capture (M3)** with the
-    auto-record switch (default OFF) and the capture probe card.
-- **Update checker (v0.3.3)**:
-  - One-URL GitHub Releases check on app open, throttled to once per hour,
-    with a generic "oneCR-update-check" User-Agent (nothing identifying).
-  - "New version available" notification: tap anywhere → the app opens on the
-    update page; expanded view shows the release notes with **Update** and
-    **Cancel** action buttons; Cancel snoozes reminders for that version for
-    24 h (a newer release overrides the snooze).
-  - Full-screen **update page above everything** (separate dialog window, so
-    it floats over the dashboard, wizard and notification center): big version
-    banner, cleaned release notes, size, "View on GitHub".
-  - Update flow: per-app **"Install unknown apps"** grant requested at the
-    moment of the Update tap → APK download with live progress → **SHA-256
-    verified against the release's SHA256SUMS.txt** → system installer opens
-    automatically (relaunched safely if the app was backgrounded mid-download).
-  - "Check for updates" row in About → Settings; version comparison is
-    component-numeric and unit-tested.
+- **In-app updater (the v0.3.3 request, shipped here).** On every app open
+  oneCR calls GitHub's `releases/latest` (read-only, no identifiers) and
+  compares against the running version:
+  - a newer release raises a **full-screen update page above everything**
+    — version arrow (`v0.3.1 → v0.3.4`), publish date, "What's new" notes
+    and **Cancel / Update** buttons;
+  - the same news arrives as a **notification** whose expanded form carries
+    the release notes plus **Cancel and Update action buttons**;
+  - tapping the notification (or its Update action) opens the app straight
+    on the update page — `singleTask` + intent extra, no activity stacking;
+  - **Update** asks for the "Install unknown apps" grant
+    (`ACTION_MANAGE_UNKNOWN_APP_SOURCES`, `REQUEST_INSTALL_PACKAGES`) when
+    needed, and the download continues automatically the moment the user
+    returns with the grant;
+  - the APK streams into `files/updates` with live progress (percent, kB),
+    retries on failure, and a finished download is handed to the system
+    installer automatically via FileProvider.
+  - Cancel hides page + notification for this session only — the update
+    comes back on the next app open, by design.
+- **About page (v0.3.4 task 2).** The full About section was cut from the
+  Settings list and rebuilt as a standalone page behind a new ⓘ icon beside
+  the notification bell in the top-right corner — same slide-in pattern as
+  the notification center, with the brand header, version chips, the six
+  link rows (Project, Developer, Bug report, Privacy, License, Build) and
+  the re-run-setup shortcut.
+- **M3 recorder foundations (roadmap task).** `WavWriter` — an incremental
+  16-bit PCM WAV writer that patches RIFF/data sizes in place on finalize
+  and leaves a recognizable zero-size crash signature — and
+  `RecordingJournal` — per-recording `journal.json` with atomic writes and
+  an orphan sweep (`stale-started` / `journal-missing` / `final-missing`)
+  that marks but never deletes. A sweep runs once per app start and logs
+  what it found. 14 new unit tests cover both.
+- **Update-system unit tests.** A dependency-free recursive-descent JSON
+  parser (MiniJson), the `releases/latest` parser and the numeric version
+  comparison (`0.3.10` > `0.3.4`, prerelease handling) are JVM-tested —
+  12 new tests, fake-fetch injected, no network in tests (79 total, all
+  green).
 
 ### Changed
-- Manifest gains `RECORD_AUDIO`, `FOREGROUND_SERVICE_MICROPHONE` and
-  `REQUEST_INSTALL_PACKAGES` — each requested in context (probe/record and the
-  Update tap respectively); a FileProvider hands the downloaded APK to the
-  installer without any storage permission.
-- MainActivity is `singleTop` so the update notification re-enters the
-  existing task and lands on the update page.
-- Version bumped to 0.3.3 (versionCode 12).
+- **Minimal-copy UI restyle (v0.3.4 task 3).** Fewer words everywhere:
+  dashboard buttons `Start` / `Stop` / `Re-check`, "No calls yet",
+  `Cellular on · VoIP off · recording in M3`, the privacy one-liner footer,
+  Settings helper lines trimmed to one short line each (theme, animations,
+  battery, permission links, mode picker), and the Library/About copy
+  reduced to single lines. The v0.2.6 chassis — animations, theming,
+  icon-tile cards — is untouched.
+- Version bumped to 0.3.4 (versionCode 12).
 
 ### Fixed
-- **GitHub Actions release workflow**: tag pushes (`0.3.3`, `v0.3.3`) did not
-  trigger the `build` job (branches-only filter), so the tag-gated `release`
-  job was skipped forever — tagged releases could never publish. The workflow
-  now triggers on tags too.
-- Restored two embedded-ADB protocol files lost from the source tree
-  (`PairingCipher`, `PairingStore`) and the HKDF/PAIRINGKEY test vectors; the
-  full TLS 1.3 + SPAKE2 + AES-128-GCM pairing end-to-end mock re-verifies the
-  reconstructed protocol (all 68 tests green).
-
-### Known limitations
-- In-app capture uses the app-uid AudioRecord path: on Android 11+ most OEMs
-  silence VOICE_CALL for third-party apps, so recordings fall back to the
-  microphone (near end, far end via speakerphone). The shell capture dex —
-  the privileged telephony mix every device grants — is the next M3 step.
-- Auto-record starts the capture while the call is already active (app may be
-  backgrounded); some Android 14 ROMs gate background microphone starts — use
-  Record-now from the Dashboard if a device refuses auto-start.
+- **CI workflow robustness (the v0.3.2 request).** The Aliyun Maven mirror
+  — added locally to dodge Maven Central rate limits — is now skipped on
+  GitHub Actions runners (`CI` env guard in settings.gradle.kts), removing
+  the one repository difference between green local and red remote builds.
+  Jobs gained hard `timeout-minutes`, the Gradle wrapper jar is validated
+  before first use, and the setup-gradle dependency-graph submission (which
+  can 401 on default token permissions) is disabled.
 
 ## [0.3.1] — 2026-11-24
 
