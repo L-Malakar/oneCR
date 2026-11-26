@@ -3,13 +3,6 @@ name: Android CI
 on:
   push:
     branches: [ main ]
-    # v0.3.3 fix: the `release` job below guards on tag refs and `needs: build`
-    # — but without a tags filter, pushing a tag never started the build job,
-    # so the release job was skipped forever (the "workflow not working" bug).
-    # Tags like "0.3.3" (this repo's convention) and "v0.3.3" both trigger now.
-    tags:
-      - 'v*'
-      - '*.*.*'
   pull_request:
   workflow_dispatch:
 
@@ -22,9 +15,18 @@ jobs:
   build:
     name: Build and test
     runs-on: ubuntu-latest
+    # v0.3.2: hard cap so a wedged download or daemon can never burn the
+    # whole runner allotment — the default is 360 minutes.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # v0.3.2: verify the wrapper jar before executing it (supply-chain guard,
+      # also fails fast with a clear message when the jar was mangled by an
+      # editor or a line-ending conversion).
+      - name: Validate Gradle wrapper
+        uses: gradle/wrapper-validation-action@v3
 
       # gradlew must carry the executable bit in git (100755). Repos pushed from
       # Windows often lose it, and the runner then fails every build with
@@ -42,6 +44,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # v0.3.2: only writes the scanned job summary — the default
+          # dependency-graph submission can 401 on repos without the right
+          # default permissions and fail an otherwise green build.
+          dependency-graph: disabled
 
       # Tests first: fail fast before spending time on packaging (v0.3.0).
       - name: Unit tests
@@ -74,6 +81,7 @@ jobs:
     # Matches this repo's tag convention (0.1.2, 0.2.0, … — no "v" prefix).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
