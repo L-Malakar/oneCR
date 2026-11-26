@@ -10,14 +10,14 @@
 
 Your calls never leave your phone. No accounts, no cloud, no telemetry — just a clean recording library with local whisper.cpp transcription and llama.cpp summaries.
 
-<a href="https://github.com/L-Malakar/oneCR/releases/download/0.3.4/oneCR-v0.3.4.apk">
-<img src="https://img.shields.io/badge/Download-oneCR%20v0.3.4%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.3.4 APK" />
+<a href="https://github.com/L-Malakar/oneCR/releases/download/0.3.5/oneCR-v0.3.5.apk">
+<img src="https://img.shields.io/badge/Download-oneCR%20v0.3.5%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.3.5 APK" />
 </a>
 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28arm64%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.3.4-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.5-orange)](CHANGELOG.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
@@ -44,6 +44,9 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | **In-app updater** — on every app open oneCR asks GitHub for the latest release; a newer version raises an update page above everything and a notification with **Cancel / Update** actions; Update walks the "Install unknown apps" grant, streams the APK with progress and hands it to the installer automatically | **v0.3.4** |
 | **About as its own page** — cut from the Settings list to a standalone page behind the ⓘ icon beside the notification bell | **v0.3.4** |
 | **Minimal UI copy** — short labels, one helper line at a time, icon-led rows across the dashboard, settings and About | **v0.3.4** |
+| **Manual "Check for updates"** — a row on the About page runs a real GitHub check on demand: spinner, "You're on the latest version", offline retry, or the full update page | **v0.3.5** |
+| **Flat minimal design pass** — shadowless stat tiles, unified corner radii and pill chips across dashboard, settings, About and event log; notification center and setup wizard untouched | **v0.3.5** |
+| **Green CI** — the workflow rewrite that fixes the zero-jobs instant failures and adds a manual "Run workflow" button | **v0.3.5** |
 | **About rows open their own pages** — Privacy → PRIVACY.md, License → LICENSE, Build → Releases; plus Developer and Report-a-bug rows | **v0.2.6** |
 | **Top-bar home button + wizard Skip on re-run only** — the logo always returns to the Dashboard; the wizard's Skip appears only when re-run from Settings, never on first launch | **v0.2.6 / v0.3.1** |
 | Two-sided cellular call recording through the shell bridge | M3 |
@@ -54,8 +57,9 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | Local export (TXT / SRT / VTT / MD / JSON / audio) | M4 |
 | Model manager (download with checksum verification, or sideload via SAF) | M5 |
 
-**v0.3.4 is still a detection-only build** — it pairs the privilege bridge with
-zero extra apps, sees/labels calls, checks GitHub for its own updates and
+**v0.3.5 is still a detection-only build** — it pairs the privilege bridge with
+zero extra apps, sees/labels calls, checks GitHub for its own updates
+(automatically on launch, or on demand from About → Check for updates) and
 carries the polished v0.2.6-grade UI layer. No audio is recorded until M3
 (the WAV writer and recording journal landed in v0.3.4; the capture engine
 is next).
@@ -96,8 +100,8 @@ Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/r
 1. **Android 8.0 or newer is required to install** (API 26+). The embedded-ADB privilege bridge needs **Android 11+** — the app checks that at runtime and shows a clear message, instead of refusing to install.
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
-4. **Updating from v0.3.x:** installs in place — the release keystore is stable from v0.3.0 onward (and versionCode 12 is higher). **Updating from v0.2.x or earlier:** that keystore was rotated at v0.3.0 (the previous one was lost with the build machine), so Android refuses an in-place update once — uninstall the old version first, then install v0.3.4. If you build from source with your own `.signing/` folder, updates install in place instead. From v0.3.4 on, the app's built-in updater can carry you to every future release by itself.
-5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.3.4.apk SHA256` on Windows). A truncated download is the most common cause of that error.
+4. **Updating from v0.3.x:** installs in place — the release keystore is stable from v0.3.0 onward (and versionCode 13 is higher). **Updating from v0.2.x or earlier:** that keystore was rotated at v0.3.0 (the previous one was lost with the build machine), so Android refuses an in-place update once — uninstall the old version first, then install v0.3.5. If you build from source with your own `.signing/` folder, updates install in place instead. From v0.3.4 on, the app's built-in updater can carry you to every future release by itself.
+5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.3.5.apk SHA256` on Windows). A truncated download is the most common cause of that error.
 6. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning (details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)).
 
 ## Setting up the embedded ADB bridge
