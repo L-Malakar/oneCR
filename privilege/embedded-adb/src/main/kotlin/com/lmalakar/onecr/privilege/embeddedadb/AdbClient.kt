@@ -5,7 +5,10 @@ import java.io.Closeable
 import java.io.DataInputStream
 import java.io.IOException
 import java.io.OutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.SSLSocket
 
 /**
@@ -15,9 +18,6 @@ import javax.net.ssl.SSLSocket
  * same — client/auth.cpp adb_auth_tls_handshake: TLS then straight to CNXN):
  *  CNXN handshake → OPEN "shell,v2:<cmd>" → OKAY → WRTE frames → CLSE.
  * Shell v2 frame = [id u8][len u32 LE][data], ids: 1 stdout / 2 stderr / 3 exit.
- *
- * v0.3.2: the packet codec moved to [AdbWire] (shared with the PCM streaming
- * client); behavior unchanged.
  */
 internal class AdbClient(
     private val identity: AdbIdentity,
@@ -31,7 +31,7 @@ internal class AdbClient(
     private var socket: SSLSocket? = null
     private var input: DataInputStream? = null
     private var output: OutputStream? = null
-    private var maxPayload = AdbWire.DEFAULT_MAX_PAYLOAD
+    private var maxPayload = DEFAULT_MAX_PAYLOAD
     private var frameCarry: ByteArray = ByteArray(0) // partial shell v2 frame bytes
 
     @Synchronized
@@ -41,14 +41,14 @@ internal class AdbClient(
         val s = TlsSupport.connect(identity, host, port, connectTimeoutMs)
         val i = DataInputStream(BufferedInputStream(s.inputStream))
         val o = s.outputStream
-        AdbWire.writePacket(o, AdbWire.CMD_CNXN, AdbWire.VERSION, AdbWire.DEFAULT_MAX_PAYLOAD, "host::onecr".toByteArray())
-        val (cmd, arg0, arg1, payload) = AdbWire.readPacket(i, maxPayload)
+        writePacket(o, CMD_CNXN, VERSION, DEFAULT_MAX_PAYLOAD, "host::onecr".toByteArray())
+        val (cmd, arg0, arg1, payload) = readPacket(i)
         when (cmd) {
-            AdbWire.CMD_CNXN -> {
-                maxPayload = arg1.takeIf { it > 0 } ?: AdbWire.DEFAULT_MAX_PAYLOAD
+            CMD_CNXN -> {
+                maxPayload = arg1.takeIf { it > 0 } ?: DEFAULT_MAX_PAYLOAD
             }
-            AdbWire.CMD_AUTH -> throw IOException("device demands legacy AUTH — pairing key not accepted")
-            else -> throw IOException("unexpected packet ${AdbWire.cmdString(cmd)} during CNXN handshake")
+            CMD_AUTH -> throw IOException("device demands legacy AUTH — pairing key not accepted")
+            else -> throw IOException("unexpected packet ${cmdString(cmd)} during CNXN handshake")
         }
         socket = s
         input = i
@@ -87,38 +87,38 @@ internal class AdbClient(
         val stderr = StringBuilder()
         var exitCode: Int? = null
 
-        val localId = AdbWire.NEXT_LOCAL_ID.incrementAndGet()
+        val localId = NEXT_LOCAL_ID.incrementAndGet()
         val service = "shell,v2:$command".toByteArray(StandardCharsets.US_ASCII) + 0
-        AdbWire.writePacket(o, AdbWire.CMD_OPEN, localId, 0, service)
+        writePacket(o, CMD_OPEN, localId, 0, service)
 
         var remoteId = 0
         var closed = false
         while (!closed && exitCode == null) {
-            val (cmd, arg0, arg1, payload) = AdbWire.readPacket(i, maxPayload)
+            val (cmd, arg0, arg1, payload) = readPacket(i)
             when (cmd) {
-                AdbWire.CMD_OKAY -> {
+                CMD_OKAY -> {
                     if (arg1 != localId) throw IOException("OKAY id mismatch (${arg0}, ${arg1})")
                     remoteId = arg0
                 }
-                AdbWire.CMD_WRTE -> {
+                CMD_WRTE -> {
                     if (arg1 != localId) throw IOException("WRTE id mismatch (${arg0}, ${arg1})")
                     consumeFrames(payload, stdout, stderr) {
                         exitCode = it
                     }
                     // The adb protocol ACKs every WRTE with OKAY.
-                    AdbWire.writePacket(o, AdbWire.CMD_OKAY, localId, remoteId, AdbWire.EMPTY)
+                    writePacket(o, CMD_OKAY, localId, remoteId, EMPTY)
                 }
-                AdbWire.CMD_CLSE -> {
+                CMD_CLSE -> {
                     if (arg1 == localId) closed = true
                 }
-                AdbWire.CMD_AUTH -> throw IOException("unexpected AUTH during shell")
-                else -> throw IOException("unexpected packet ${AdbWire.cmdString(cmd)} during shell")
+                CMD_AUTH -> throw IOException("unexpected AUTH during shell")
+                else -> throw IOException("unexpected packet ${cmdString(cmd)} during shell")
             }
         }
 
         // Politely close the stream if the device did not.
         if (!closed && remoteId != 0) {
-            runCatching { AdbWire.writePacket(o, AdbWire.CMD_CLSE, localId, remoteId, AdbWire.EMPTY) }
+            runCatching { writePacket(o, CMD_CLSE, localId, remoteId, EMPTY) }
         }
 
         val combined = buildString {
@@ -155,15 +155,69 @@ internal class AdbClient(
             if (off + 5 + len > buf.size) break // incomplete frame — wait for more
             val data = String(buf, off + 5, len, Charsets.ISO_8859_1)
             when (id) {
-                AdbWire.FRAME_STDOUT, AdbWire.FRAME_STDIN -> stdout.append(data)
-                AdbWire.FRAME_STDERR -> stderr.append(data)
-                AdbWire.FRAME_EXIT -> if (len >= 1) onExit(buf[off + 5].toInt() and 0xFF)
+                FRAME_STDOUT, FRAME_STDIN -> stdout.append(data)
+                FRAME_STDERR -> stderr.append(data)
+                FRAME_EXIT -> if (len >= 1) onExit(buf[off + 5].toInt() and 0xFF)
                 else -> Unit // unknown frame — ignore (forward compatible)
             }
             off += 5 + len
         }
         frameCarry = if (off < buf.size) buf.copyOfRange(off, buf.size) else ByteArray(0)
     }
+
+    // ------------------------------------------------------------------
+    // Packet codec (adb.h): cmd(4) arg0 arg1 len checksum magic
+    // ------------------------------------------------------------------
+
+    private fun writePacket(out: OutputStream, cmd: Int, arg0: Int, arg1: Int, payload: ByteArray) {
+        val checksum = payload.sumOf { (it.toInt() and 0xFF).toLong() }.toInt()
+        val buf = ByteBuffer.allocate(24 + payload.size).order(ByteOrder.BIG_ENDIAN)
+        buf.putInt(cmd)
+        buf.putInt(arg0)
+        buf.putInt(arg1)
+        buf.putInt(payload.size)
+        buf.putInt(checksum)
+        buf.putInt(checksum.inv()) // magic = checksum ^ 0xffffffff
+        buf.put(payload)
+        out.write(buf.array())
+        out.flush()
+    }
+
+    private fun readPacket(input: DataInputStream): Packet {
+        val header = ByteArray(24)
+        input.readFully(header)
+        val bb = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN)
+        val cmd = bb.int
+        val arg0 = bb.int
+        val arg1 = bb.int
+        val len = bb.int
+        val checksum = bb.int
+        val magic = bb.int
+        if (checksum != magic.inv()) {
+            throw IOException("adb packet checksum/magic mismatch")
+        }
+        if (len < 0 || len > maxPayload * 2) {
+            throw IOException("adb packet payload ${len}B exceeds sane bounds")
+        }
+        val payload = ByteArray(len)
+        if (len > 0) input.readFully(payload)
+        val actual = payload.sumOf { (it.toInt() and 0xFF).toLong() }.toInt()
+        if (len > 0 && actual != checksum) {
+            throw IOException("adb packet payload checksum mismatch")
+        }
+        return Packet(cmd, arg0, arg1, payload)
+    }
+
+    private data class Packet(val cmd: Int, val arg0: Int, val arg1: Int, val payload: ByteArray)
+
+    private fun cmdString(cmd: Int): String = String(
+        byteArrayOf(
+            ((cmd ushr 24) and 0xFF).toByte(),
+            ((cmd ushr 16) and 0xFF).toByte(),
+            ((cmd ushr 8) and 0xFF).toByte(),
+            (cmd and 0xFF).toByte(),
+        ),
+    )
 
     @Synchronized
     override fun close() {
@@ -178,6 +232,30 @@ internal class AdbClient(
     }
 
     companion object {
-        private const val CONNECT_TIMEOUT_MS = AdbWire.CONNECT_TIMEOUT_MS
+        private const val VERSION = 0x01000001
+        private const val DEFAULT_MAX_PAYLOAD = 256 * 1024
+        private const val CONNECT_TIMEOUT_MS = 10_000
+
+        private val CMD_CNXN = cmdInt("CNXN")
+        private val CMD_AUTH = cmdInt("AUTH")
+        private val CMD_OPEN = cmdInt("OPEN")
+        private val CMD_OKAY = cmdInt("OKAY")
+        private val CMD_CLSE = cmdInt("CLSE")
+        private val CMD_WRTE = cmdInt("WRTE")
+
+        private const val FRAME_STDIN = 0
+        private const val FRAME_STDOUT = 1
+        private const val FRAME_STDERR = 2
+        private const val FRAME_EXIT = 3
+
+        private val NEXT_LOCAL_ID = AtomicInteger(1)
+        private val EMPTY = ByteArray(0)
+
+        /** adb commands are stored as 4-char strings read big-endian on the wire. */
+        private fun cmdInt(s: String): Int =
+            ((s[0].code and 0xFF) shl 24) or
+                ((s[1].code and 0xFF) shl 16) or
+                ((s[2].code and 0xFF) shl 8) or
+                (s[3].code and 0xFF)
     }
 }
