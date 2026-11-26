@@ -21,8 +21,7 @@ fun LibraryScreen(modifier: Modifier = Modifier) {
         EmptyState(
             icon = Icons.Filled.PlayArrow,
             title = "No recordings yet",
-            description = "Call capture arrives in M3 and the library in M4. Recordings, " +
-                "transcripts and summaries will all show up here — stored only on this device.",
+            description = "Capture arrives in M3 — everything stays on this device.",
             modifier = Modifier.fillMaxSize(),
         )
     }
