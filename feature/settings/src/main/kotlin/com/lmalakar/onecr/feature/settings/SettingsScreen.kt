@@ -660,7 +660,7 @@ private fun FutureCard(
                 )
             }
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(999.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer,
             ) {
                 Text(
