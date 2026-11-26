@@ -26,15 +26,6 @@ class AppSettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_DETECTION_AUTOSTART, false)
         set(value) = prefs.edit().putBoolean(KEY_DETECTION_AUTOSTART, value).apply()
 
-    /**
-     * v0.3.2 (M3): start a shell recording automatically when a cellular call
-     * is detected. ON by default — that is the entire point of a call recorder —
-     * and the Dashboard "Record now" button works regardless of this setting.
-     */
-    var autoRecordEnabled: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_RECORD, true)
-        set(value) = prefs.edit().putBoolean(KEY_AUTO_RECORD, value).apply()
-
     /** Theme preference; SYSTEM (follow the OS) is the default. */
     var themeMode: ThemeMode
         get() = ThemeMode.fromStorageKey(prefs.getString(KEY_THEME_MODE, null))
@@ -57,14 +48,49 @@ class AppSettingsStore(context: Context) {
         get() = prefs.getLong(KEY_NOTIFICATION_LAST_SEEN, 0L)
         set(value) = prefs.edit().putLong(KEY_NOTIFICATION_LAST_SEEN, value).apply()
 
+    /**
+     * Auto-record detected cellular calls (M3 step 1, v0.3.3). OFF by default —
+     * the user opts in from Settings → Capture; the Dashboard's manual
+     * "Record now" button works regardless.
+     */
+    var autoRecordCalls: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RECORD_CALLS, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RECORD_CALLS, value).apply()
+
+    // ---- Update checker (v0.3.3) ------------------------------------
+
+    /** Last *successful* GitHub update check (epoch millis) — throttles checks to one per hour. */
+    var updateLastCheckAtMillis: Long
+        get() = prefs.getLong(KEY_UPDATE_LAST_CHECK, 0L)
+        set(value) = prefs.edit().putLong(KEY_UPDATE_LAST_CHECK, value).apply()
+
+    /** Version whose "new update" notification was already posted (no re-post spam). */
+    var updateLastNotifiedVersion: String?
+        get() = prefs.getString(KEY_UPDATE_LAST_NOTIFIED, null)
+        set(value) = prefs.edit().putString(KEY_UPDATE_LAST_NOTIFIED, value).apply()
+
+    /** Version the user snoozed update reminders for (Cancel button). */
+    var updateSnoozedVersion: String?
+        get() = prefs.getString(KEY_UPDATE_SNOOZED_VERSION, null)
+        set(value) = prefs.edit().putString(KEY_UPDATE_SNOOZED_VERSION, value).apply()
+
+    /** Until when the snooze holds (epoch millis). A NEWER version ignores it. */
+    var updateSnoozeUntilMillis: Long
+        get() = prefs.getLong(KEY_UPDATE_SNOOZE_UNTIL, 0L)
+        set(value) = prefs.edit().putLong(KEY_UPDATE_SNOOZE_UNTIL, value).apply()
+
     private companion object {
         const val KEY_ONBOARDING_DONE = "onboarding_completed"
         const val KEY_PRIVILEGE_MODE = "privilege_mode"
         const val KEY_DETECTION_AUTOSTART = "detection_autostart"
-        const val KEY_AUTO_RECORD = "auto_record_enabled"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
         const val KEY_NOTIFICATION_LAST_SEEN = "notification_last_seen"
+        const val KEY_AUTO_RECORD_CALLS = "auto_record_calls"
+        const val KEY_UPDATE_LAST_CHECK = "update_last_check_at"
+        const val KEY_UPDATE_LAST_NOTIFIED = "update_last_notified_version"
+        const val KEY_UPDATE_SNOOZED_VERSION = "update_snoozed_version"
+        const val KEY_UPDATE_SNOOZE_UNTIL = "update_snooze_until"
     }
 }
 
