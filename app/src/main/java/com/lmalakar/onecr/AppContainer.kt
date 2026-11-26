@@ -11,10 +11,11 @@ import com.lmalakar.onecr.core.common.DispatchersProvider
 import com.lmalakar.onecr.core.common.Logger
 import com.lmalakar.onecr.core.common.SystemTimeProvider
 import com.lmalakar.onecr.core.model.AppInfo
-import com.lmalakar.onecr.core.model.CallDirection
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.AppSettingsStore
+import com.lmalakar.onecr.data.files.EventLogEntry
 import com.lmalakar.onecr.data.files.EventLogStore
+import com.lmalakar.onecr.data.files.RecordingJournal
 import com.lmalakar.onecr.notify.NotificationCenter
 import com.lmalakar.onecr.notify.PermissionReader
 import com.lmalakar.onecr.privilege.api.BootCountStore
@@ -26,11 +27,9 @@ import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
 import com.lmalakar.onecr.service.detection.CallerIdResolver
 import com.lmalakar.onecr.service.detection.DetectionEngine
 import com.lmalakar.onecr.service.detection.DetectionServiceHost
-import com.lmalakar.onecr.service.detection.LiveCallState
-import com.lmalakar.onecr.service.recorder.RecorderHost
-import com.lmalakar.onecr.service.recorder.RecordingEngine
-import com.lmalakar.onecr.update.UpdateManager
+import com.lmalakar.onecr.update.UpdateCoordinator
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
@@ -120,31 +119,29 @@ class AppContainer(appContext: Context) {
         eventLog = eventLog,
     )
 
-    // ---- Capture (M3 step 1, v0.3.3) ----
+    // ---- Recorder groundwork (M3, v0.3.4) ----
+
     /**
-     * The recording engine: probe-verified source fallback, PCM → WAV, crash
-     * journal + orphan sweep. Auto-captures detected cellular calls when the
-     * Settings switch is on; the Dashboard's "Record now" works always.
+     * Per-recording crash-recovery journals under filesDir/recordings (see
+     * StorageLayout). The capture engine (later M3 releases) starts a session
+     * per call and finalizes it after mixing; the sweep below marks takes
+     * that can never complete. Nothing here records audio yet — the journal
+     * and the WAV writer are the tested foundations the engine will use.
      */
-    val recordingEngine = RecordingEngine(
+    val recordingJournal = RecordingJournal(File(appContext.filesDir, "recordings"))
+
+    // ---- In-app updater (v0.3.3) ----
+
+    /**
+     * GitHub release check → update notification → update page → APK
+     * download → system installer. Checked once per app open; Cancel only
+     * hides it for the session.
+     */
+    val updateCoordinator = UpdateCoordinator(
         appContext = appContext,
-        dispatchers = dispatchers,
-        time = SystemTimeProvider(),
-        logger = logger,
-        eventLog = eventLog,
-        provider = { privilegeProvider },
-        autoRecordEnabled = { settings.autoRecordCalls },
         scope = appScope,
+        currentVersion = appInfo.versionName,
     )
-
-    /** Compose-observable mirror of [AppSettingsStore.autoRecordCalls]. */
-    val autoRecordCalls = mutableStateOf(settings.autoRecordCalls)
-
-    /** Persist the auto-record switch. */
-    fun setAutoRecordCalls(enabled: Boolean) {
-        settings.autoRecordCalls = enabled
-        autoRecordCalls.value = enabled
-    }
 
     // ---- Appearance (v0.2.1) ----
     /** Compose-observable mirror of [AppSettingsStore.themeMode]; SYSTEM by default. */
@@ -223,53 +220,23 @@ class AppContainer(appContext: Context) {
         notificationCenter.refresh()
     }
 
-    // ---- Update checker (v0.3.3) ----
-
-    /**
-     * GitHub release update checker: throttled check on open, notification
-     * with Update/Cancel actions, the above-everything update page, and the
-     * permission → download → SHA-256 → install flow.
-     */
-    val updateManager = UpdateManager(
-        appContext = appContext,
-        scope = appScope,
-        dispatchers = dispatchers,
-        settings = settings,
-        logger = logger,
-        currentVersionName = appInfo.versionName,
-    )
-
     init {
         DetectionServiceHost.engineProvider = { detection }
-        RecorderHost.engineProvider = { recordingEngine }
         privilegeMonitor.start()
-
-        // Auto capture: forward the live call state to the recorder engine.
-        // The recorder module stays decoupled from :service:detection — the
-        // app owns the wiring (same inversion as DetectionServiceHost).
-        appScope.launch(dispatchers.default) {
-            detection.callState.collect { state ->
-                when (state) {
-                    is LiveCallState.CellularActive ->
-                        recordingEngine.onCallStateChanged(
-                            callActive = true,
-                            direction = state.direction,
-                            phone = state.number,
-                        )
-
-                    is LiveCallState.VoipActive ->
-                        recordingEngine.onCallStateChanged(
-                            callActive = true,
-                            direction = CallDirection.VOIP,
-                            phone = null,
-                        )
-
-                    LiveCallState.Idle, is LiveCallState.CellularRinging ->
-                        recordingEngine.onCallStateChanged(
-                            callActive = false,
-                            direction = CallDirection.UNKNOWN,
-                            phone = null,
-                        )
+        // Recorder groundwork (v0.3.4): one orphan sweep per app start marks
+        // crashed takes so M3's engine (and later the Library) never mistakes
+        // them for recordings. Marks journals only — deletes nothing.
+        appScope.launch(Dispatchers.IO) {
+            runCatching {
+                val report = recordingJournal.sweepOrphans()
+                if (report.orphanedCount > 0) {
+                    eventLog.append(
+                        EventLogEntry(
+                            timestampMillis = System.currentTimeMillis(),
+                            kind = EventLogEntry.KIND_SERVICE,
+                            message = "Sweep marked ${report.orphanedCount} orphaned recording(s)",
+                        ),
+                    )
                 }
             }
         }
