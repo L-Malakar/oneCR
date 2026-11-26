@@ -13,14 +13,6 @@ object RecorderContract {
     const val NOTIFICATION_ID_RECORDING = 41
 }
 
-/**
- * Bridge the service uses to reach the app's single [RecordingEngine]
- * (same inversion as DetectionServiceHost — :app injects it at process start).
- */
-object RecorderServiceHost {
-    var engineProvider: (() -> RecordingEngine)? = null
-}
-
 /** Parameters chosen for a recording session (defaults match the whisper pipeline input). */
 data class RecordingSessionSpec(
     val sampleRateHz: Int = 16_000,
