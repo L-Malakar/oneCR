@@ -23,6 +23,10 @@ import com.lmalakar.onecr.ui.OneCRApp
  * window behind it (the setup wizard draws no background of its own), the
  * system bars and platform dialogs kept the OS day/night configuration —
  * which is why pinning Dark still showed light surfaces on some screens.
+ *
+ * v0.3.3: singleTop + [onNewIntent] so the update notification can bring the
+ * existing task forward and land the user on the update page (the extras are
+ * consumed by [com.lmalakar.onecr.update.UpdateManager.handleIntent]).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -41,6 +45,9 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+
+        // v0.3.3: opened from the update notification? Show the update page.
+        container.updateManager.handleIntent(intent)
 
         setContent {
             // v0.2.1 theme setting: SYSTEM follows the OS, LIGHT/DARK are pinned.
@@ -63,6 +70,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // singleTop: the update notification re-enters the existing task here.
+        (application as OneCRApplication).container.updateManager.handleIntent(intent)
+    }
+
     override fun onResume() {
         super.onResume()
         val container = (application as OneCRApplication).container
@@ -72,5 +85,13 @@ class MainActivity : AppCompatActivity() {
         container.notificationCenter.refresh()
         container.resumeTick.intValue++
         container.privilegeMonitor.refreshAsync()
+        // v0.3.3: throttled GitHub update check + auto update page + continue
+        // the download/install flow after the "Install unknown apps" grant.
+        container.updateManager.onAppResumed()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        (application as OneCRApplication).container.updateManager.onAppPaused()
     }
 }
