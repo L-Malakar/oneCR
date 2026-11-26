@@ -15,6 +15,7 @@ import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
 import com.lmalakar.onecr.ui.OneCRApp
+import com.lmalakar.onecr.update.UpdateCoordinator
 
 /**
  * v0.2.4: the host activity is now an AppCompatActivity carrying a DayNight
@@ -24,11 +25,16 @@ import com.lmalakar.onecr.ui.OneCRApp
  * system bars and platform dialogs kept the OS day/night configuration —
  * which is why pinning Dark still showed light surfaces on some screens.
  *
- * v0.3.3: singleTop + [onNewIntent] so the update notification can bring the
- * existing task forward and land the user on the update page (the extras are
- * consumed by [com.lmalakar.onecr.update.UpdateManager.handleIntent]).
+ * v0.3.3: singleTask + the show-update-page intent extra, so a tap on the
+ * update notification (or its Update action) brings this activity forward
+ * on the update page instead of stacking a second copy. The update check
+ * runs on every app open; if the user just came back from the "Install
+ * unknown apps" screen with the grant, the APK download they asked for
+ * continues automatically (see UpdateCoordinator.onAppResumed).
  */
 class MainActivity : AppCompatActivity() {
+
+    private var handledIntentHash: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,8 +52,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // v0.3.3: opened from the update notification? Show the update page.
-        container.updateManager.handleIntent(intent)
+        // v0.3.3: check GitHub for a newer release on every app open.
+        container.updateCoordinator.checkOnLaunch()
+        handleUpdateIntent(intent)
 
         setContent {
             // v0.2.1 theme setting: SYSTEM follows the OS, LIGHT/DARK are pinned.
@@ -72,8 +79,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // singleTop: the update notification re-enters the existing task here.
-        (application as OneCRApplication).container.updateManager.handleIntent(intent)
+        // singleTask: the notification tap lands here while we are alive.
+        handleUpdateIntent(intent)
+    }
+
+    private fun handleUpdateIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(UpdateCoordinator.EXTRA_SHOW_UPDATE_PAGE, false) == true) {
+            val hash = intent.hashCode()
+            if (hash != handledIntentHash) {
+                handledIntentHash = hash
+                (application as OneCRApplication).container.updateCoordinator.openFromNotification()
+            }
+        }
     }
 
     override fun onResume() {
@@ -85,13 +102,8 @@ class MainActivity : AppCompatActivity() {
         container.notificationCenter.refresh()
         container.resumeTick.intValue++
         container.privilegeMonitor.refreshAsync()
-        // v0.3.3: throttled GitHub update check + auto update page + continue
-        // the download/install flow after the "Install unknown apps" grant.
-        container.updateManager.onAppResumed()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        (application as OneCRApplication).container.updateManager.onAppPaused()
+        // v0.3.3: back from the "Install unknown apps" grant screen with the
+        // grant in hand → the requested download continues on its own.
+        container.updateCoordinator.onAppResumed()
     }
 }
