@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,11 +58,26 @@ private const val LICENSE_URL = "https://github.com/L-Malakar/oneCR/blob/main/LI
 private const val RELEASES_URL = "https://github.com/L-Malakar/oneCR/releases"
 
 /**
+ * Plain state for the About page's manual update check (v0.3.5). Kept in the
+ * feature module so :app can map its richer coordinator state onto it without
+ * a reverse dependency.
+ */
+data class UpdateCheckUi(
+    val checking: Boolean = false,
+    val upToDate: Boolean = false,
+    val failed: Boolean = false,
+)
+
+/**
  * The About page (v0.3.4) — cut out of the Settings list and promoted to a
  * standalone page behind the ⓘ icon next to the notification bell, with the
  * same slide-in feel as the notification center. Same facts as before
  * (brand header, version chips, links), but restyled minimal: every row is
  * one icon, one title and one short line — no paragraphs.
+ *
+ * v0.3.5: a "Check for updates" row runs a real GitHub check on demand —
+ * a newer release opens the full update page, "latest" and offline states
+ * answer right in the row. Row shapes unified with the rest of the app.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +86,10 @@ fun AboutScreen(
     logoRes: Int,
     onRerunOnboarding: () -> Unit,
     onBack: () -> Unit,
+    updateAvailableVersion: String? = null,
+    updateCheck: UpdateCheckUi = UpdateCheckUi(),
+    onCheckForUpdates: () -> Unit = {},
+    onOpenUpdatePage: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -112,7 +133,7 @@ fun AboutScreen(
             // ---- Brand header ----------------------------------------------
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
             ) {
                 Box(
                     modifier = Modifier
@@ -156,6 +177,46 @@ fun AboutScreen(
                         }
                     }
                 }
+            }
+
+            // ---- Update check (v0.3.5) --------------------------------------
+            when {
+                updateAvailableVersion != null -> AboutRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Update available",
+                    detail = "oneCR $updateAvailableVersion is ready to install",
+                    emphasized = true,
+                    onClick = onOpenUpdatePage,
+                )
+
+                updateCheck.checking -> AboutRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Check for updates",
+                    detail = "Talking to GitHub…",
+                    busy = true,
+                    onClick = {},
+                )
+
+                updateCheck.upToDate -> AboutRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Check for updates",
+                    detail = "You're on the latest version",
+                    onClick = onCheckForUpdates,
+                )
+
+                updateCheck.failed -> AboutRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Check for updates",
+                    detail = "Couldn't reach GitHub — tap to retry",
+                    onClick = onCheckForUpdates,
+                )
+
+                else -> AboutRow(
+                    icon = Icons.Filled.SystemUpdate,
+                    title = "Check for updates",
+                    detail = "Check GitHub for a newer oneCR",
+                    onClick = onCheckForUpdates,
+                )
             }
 
             // ---- Links (one icon, one title, one short line) -----------------
@@ -211,7 +272,7 @@ fun AboutScreen(
 @Composable
 private fun InfoChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(999.dp),
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
     ) {
         Text(
@@ -236,13 +297,19 @@ private fun AboutRow(
     title: String,
     detail: String,
     onClick: () -> Unit,
+    emphasized: Boolean = false,
+    busy: Boolean = false,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+            .clickable(enabled = !busy, onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (emphasized) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -263,19 +330,35 @@ private fun AboutRow(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = if (emphasized) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
                 Text(
                     text = detail,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (emphasized) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
