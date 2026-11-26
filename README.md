@@ -10,14 +10,14 @@
 
 Your calls never leave your phone. No accounts, no cloud, no telemetry — just a clean recording library with local whisper.cpp transcription and llama.cpp summaries.
 
-<a href="https://github.com/L-Malakar/oneCR/releases/download/0.3.3/oneCR-v0.3.3.apk">
-<img src="https://img.shields.io/badge/Download-oneCR%20v0.3.3%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.3.3 APK" />
+<a href="https://github.com/L-Malakar/oneCR/releases/download/0.3.4/oneCR-v0.3.4.apk">
+<img src="https://img.shields.io/badge/Download-oneCR%20v0.3.4%20APK-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download oneCR v0.3.4 APK" />
 </a>
 
 [![Build status](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml/badge.svg)](https://github.com/L-Malakar/oneCR/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%208%2B%20%28arm64%29-green)](README.md)
-[![Version](https://img.shields.io/badge/version-0.3.3-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.4-orange)](CHANGELOG.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
@@ -41,34 +41,32 @@ Your calls never leave your phone. No accounts, no cloud, no telemetry — just 
 | **The 24×7 watcher survives app close and reboot** — `stopWithTask=false`, notification re-asserted on task removal, boot receiver restarts detection, plus a one-tap battery-exemption card | **v0.2.6** |
 | **Smooth animations everywhere + an Animations switch (default on)** — tabs, sub-pages, wizard steps, counters and progress bars move with consistent slide + fade | **v0.2.6** |
 | **Modern settings panel** — icon tiles lead every card, segmented theme control, privilege-mode picker, Keep-alive battery card | **v0.2.6 / v0.3.1** |
+| **In-app updater** — on every app open oneCR asks GitHub for the latest release; a newer version raises an update page above everything and a notification with **Cancel / Update** actions; Update walks the "Install unknown apps" grant, streams the APK with progress and hands it to the installer automatically | **v0.3.4** |
+| **About as its own page** — cut from the Settings list to a standalone page behind the ⓘ icon beside the notification bell | **v0.3.4** |
+| **Minimal UI copy** — short labels, one helper line at a time, icon-led rows across the dashboard, settings and About | **v0.3.4** |
 | **About rows open their own pages** — Privacy → PRIVACY.md, License → LICENSE, Build → Releases; plus Developer and Report-a-bug rows | **v0.2.6** |
 | **Top-bar home button + wizard Skip on re-run only** — the logo always returns to the Dashboard; the wizard's Skip appears only when re-run from Settings, never on first launch | **v0.2.6 / v0.3.1** |
-| **Capture engine step 1 (M3)** — "Record now" and auto-record on detected cellular calls, captured through a probe-verified fallback chain (VOICE_CALL where the device allows it → microphone), streamed into a WAV file with a crash-recovery journal and orphan sweep, a microphone-type foreground service with a Stop action | **v0.3.3** |
-| **Capture probe + diagnostics** — Settings runs a quick probe of the audio sources and reports which ones really return audio on this device (the chain the recorder follows) | **v0.3.3** |
-| **Update checker** — the app compares itself against the latest GitHub release on open (throttled), posts a "new version available" notification with Update/Cancel actions, and shows a full-screen update page above everything with release notes; Update asks for the "Install unknown apps" grant, downloads the APK with SHA-256 verification and opens the installer automatically | **v0.3.3** |
-| VoIP call recording via playback capture + mic mix | M3 (next step) |
-| Shell capture dex (privileged telephony VOICE_CALL mix via app_process) | M3 (next step) |
-| Dual downlink/uplink streams for speaker labels | M3 (next step) |
+| Two-sided cellular call recording through the shell bridge | M3 |
+| VoIP call recording via playback capture + mic mix | M3 |
 | Recordings library with player, tags and local full-text search | M4 |
 | On-device transcription (whisper.cpp, multilingual) | M5 |
 | On-device call summaries (llama.cpp, Qwen2.5-1.5B default) | M5 |
 | Local export (TXT / SRT / VTT / MD / JSON / audio) | M4 |
 | Model manager (download with checksum verification, or sideload via SAF) | M5 |
 
-**v0.3.3 starts the capture engine (M3 step 1)** — the Dashboard's Record-now
-button and the Settings auto-record switch drive a real recording pipeline:
-probe-verified source fallback (VOICE_CALL when the OEM permits it, microphone
-otherwise) → PCM → WAV, with a crash-recovery journal and orphan sweep and a
-microphone-typed foreground service. The shell capture dex (the privileged
-telephony mix via app_process) is the next M3 step.
+**v0.3.4 is still a detection-only build** — it pairs the privilege bridge with
+zero extra apps, sees/labels calls, checks GitHub for its own updates and
+carries the polished v0.2.6-grade UI layer. No audio is recorded until M3
+(the WAV writer and recording journal landed in v0.3.4; the capture engine
+is next).
 
 ## Why oneCR is different
 
-- **Local-first by architecture.** The only network traffic is the model download *you* explicitly start (plus the hourly one-URL update check the app runs against GitHub's public Releases API — it carries nothing that identifies you). Everything else — audio, transcripts, summaries, search — stays on the device. See [PRIVACY.md](PRIVACY.md).
+- **Local-first by architecture.** The only network traffic is the model download *you* explicitly start. Everything else — audio, transcripts, summaries, search — stays on the device. See [PRIVACY.md](PRIVACY.md).
 - **No root, no PC, no extra daemon.** Since v0.3.0 oneCR pairs with your phone's own Wireless Debugging (the Android 11+ pairing protocol, implemented on-device in Kotlin: SPAKE2 over edwards25519 + TLS 1.3 + AES-128-GCM) — the privileged route that needs no third-party app. Prefer [Shizuku](https://shizuku.rikka.app/)? Switch modes in Settings.
-- **Auditable privileged surface.** The shell side is tiny and readable: a Shizuku AIDL service with `exec`/`getUid`/`openCaptureStream` — the embedded-ADB path runs the same commands over adb, and the capture entry point is one small framework-only class you can read in a minute.
+- **Auditable privileged surface.** The shell side is tiny and readable: a Shizuku AIDL service with `exec`/`getUid` — the embedded-ADB path runs the same minimal commands over adb.
 - **One-command builds.** `build.bat` on Windows checks the environment, generates a local signing keystore on first run, compiles everything and publishes `oneCR\Android\oneCR-v<version>.apk`.
-- **Tested protocol stack.** The pairing, shell-protocol and recorder layers are covered by cross-validated unit tests (SPAKE2 against an independent reference implementation, RFC 5869 HKDF vectors, end-to-end TLS pairing/shell mocks, WAV-header and crash-journal coverage) — 68 green tests.
+- **Tested protocol stack.** The pairing and shell protocol layers are covered by cross-validated unit tests (SPAKE2 against an independent reference implementation, RFC 5869 HKDF vectors, end-to-end TLS pairing/shell mocks) — 24 green tests.
 
 ## Quick start (Windows)
 
@@ -98,8 +96,8 @@ Grab `oneCR-v<version>.apk` from [Releases](https://github.com/L-Malakar/oneCR/r
 1. **Android 8.0 or newer is required to install** (API 26+). The embedded-ADB privilege bridge needs **Android 11+** — the app checks that at runtime and shows a clear message, instead of refusing to install.
 2. Allow **"Install unknown apps"** for the browser/file manager you install from (Settings → Apps → Special access → Install unknown apps).
 3. Download the APK with a **browser**, not a chat app — WhatsApp/Telegram re-encode or truncate APK attachments, which really does produce a "problem parsing the package" error. Check the file size against the release page before installing.
-4. **Updating from v0.3.0/v0.3.1:** installs in place — the release keystore is stable from v0.3.0 onward (and versionCode 12 is higher); from v0.3.3 the app can even do this for you — tap **Update** on its update page or notification. **Updating from v0.2.x or earlier:** that keystore was rotated at v0.3.0 (the previous one was lost with the build machine), so Android refuses an in-place update once — uninstall the old version first, then install v0.3.3. If you build from source with your own `.signing/` folder, updates install in place instead.
-5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.3.3.apk SHA256` on Windows). A truncated download is the most common cause of that error — and the in-app updater checks this hash for you before installing.
+4. **Updating from v0.3.x:** installs in place — the release keystore is stable from v0.3.0 onward (and versionCode 12 is higher). **Updating from v0.2.x or earlier:** that keystore was rotated at v0.3.0 (the previous one was lost with the build machine), so Android refuses an in-place update once — uninstall the old version first, then install v0.3.4. If you build from source with your own `.signing/` folder, updates install in place instead. From v0.3.4 on, the app's built-in updater can carry you to every future release by itself.
+5. Verify the download if the installer says the package is corrupt: compare the file's SHA-256 with the one printed on the release page (`certutil -hashfile oneCR-v0.3.4.apk SHA256` on Windows). A truncated download is the most common cause of that error.
 6. Some OEM ROMs (MIUI/ColorOS) block sideloads under "Install via USB" or Play Protect warnings — approve the install when prompted or temporarily disable Play Protect scanning (details in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)).
 
 ## Setting up the embedded ADB bridge
@@ -116,22 +114,15 @@ Constraints (same as every embedded-ADB recorder): Developer options stay enable
 
 ## FAQ
 
-**Does oneCR record calls yet?** The recording pipeline is real since v0.3.3 — Record-now and auto-record on detected cellular calls capture through the probe-verified fallback chain (VOICE_CALL where the OEM allows it, microphone otherwise) into WAV files in the app-private storage; the library/finder UI arrives with M4. The shell capture dex — the privileged telephony VOICE_CALL mix that every device grants — is the next M3 step. VoIP capture follows it. The roadmap is [docs/ROADMAP.md](docs/ROADMAP.md).
+**Does oneCR record calls yet?** Not until M3 — v0.3.x proves the privilege bridge and detects calls (the WAV writer and recording journal landed in v0.3.4; the capture engine is next). The roadmap is [docs/ROADMAP.md](docs/ROADMAP.md).
 
-**What changed in v0.3.3?** Two things:
+**What changed in v0.3.4?** The in-app updater (GitHub release check on every open, update page above everything, notification with Cancel/Update actions, APK download with automatic install), the About page moved to its own screen behind the ⓘ icon beside the bell, a minimal-copy UI restyle, the M3 recorder foundations (WAV writer + recording journal + orphan sweep), and CI hardening (the Aliyun mirror is skipped on GitHub runners, wrapper validation, job timeouts).
 
-1. **M3 step 1 — the capture engine.** RecordingEngine wired end-to-end: probe-verified source fallback, streaming WAV writer (RFC-correct headers, patched on stop), crash-recovery journal + orphan sweep, a microphone-type foreground service with a Stop action, the Dashboard's Record-now button, the auto-record switch and the capture probe in Settings.
-2. **The update checker.** oneCR now checks GitHub Releases on open (throttled to one call/hour), posts a "new version available" notification whose expanded view carries the release notes plus Update/Cancel buttons, opens a full-screen update page above everything, and runs the Update flow: ask for the per-app "Install unknown apps" grant → download the release APK with live progress → verify it against the release's SHA256SUMS.txt → open the system installer automatically.
-
-This release also fixes the GitHub Actions release workflow (the tag trigger was missing, so tag pushes never started the build job and the publish job could never run) and restores two embedded-ADB protocol files lost from the source tree (`PairingCipher`, `PairingStore` — reconstructed to their pinned test API and re-verified by the full TLS pairing mock).
-
-**How does the update checker work?** On open (at most once per hour) the app fetches one public URL — `api.github.com/repos/L-Malakar/oneCR/releases/latest` — with a generic "oneCR-update-check" User-Agent and no other payload. If the release is newer, it posts a notification and shows the update page. Tap Update → Android's per-app "Install unknown apps" screen → the APK downloads from GitHub with a live progress bar, is verified against the release's SHA256SUMS.txt, and the system installer opens on its own. Cancel snoozes reminders for that version for 24 hours; a newer release overrides the snooze.
-
-**What changed in v0.3.1?** v0.3.0 accidentally shipped an older UI layer (the v0.2.5/v0.2.6 polish was missing from that build). v0.3.1 restores the complete v0.2.6 UI/UX — modern dashboard and settings, animations with the settings switch, notification center, 24×7 watcher persistence, boot receiver — on top of the v0.3.0 embedded ADB bridge, and keeps the wizard's Skip button on re-runs only.
+**What does the in-app updater send anywhere?** One read-only GET to `api.github.com/repos/L-Malakar/oneCR/releases/latest` per app open, and the APK download only after you press Update. No identifiers, no telemetry, no other endpoints. See [PRIVACY.md](PRIVACY.md).
 
 **Root needed?** No. The embedded ADB bridge uses the same Wireless Debugging pairing your PC's `adb pair` uses; Shizuku is optional, not required.
 
-**Is my call content sent anywhere?** No. oneCR has no servers and requests no cloud permissions; the `INTERNET` permission covers three local/one-URL things: TLS sockets to your phone's own adbd, the hourly one-URL update check against GitHub's public Releases API (and the APK download you approve), and — in M5 — model downloads you start. See [PRIVACY.md](PRIVACY.md).
+**Is my call content sent anywhere?** No. oneCR has no servers and requests no cloud permissions; the `INTERNET` permission exists only to open local TLS sockets to your phone's own adbd (and, in M5, for model downloads you start). See [PRIVACY.md](PRIVACY.md).
 
 **Why is the APK bigger than v0.2.x (~9.5 MB vs ~1.5 MB)?** The bundled BoringSSL (Conscrypt) ships native TLS libraries for each ABI — that is what makes the on-device pairing possible without any external app.
 
