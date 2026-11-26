@@ -15,7 +15,13 @@ pluginManagement {
         // artifacts: repo.maven.apache.org rate-limits some IPs (HTTP 429),
         // which aborts first-time builds of this project. Maven Central stays
         // in the list as the canonical fallback (v0.2.4).
-        maven("https://maven.aliyun.com/repository/public")
+        //
+        // v0.3.2: the mirror is SKIPPED on GitHub Actions — runners live close
+        // to Maven Central anyway, and a slow or flaky mirror hop was the one
+        // repository difference between green local builds and red CI builds.
+        if (System.getenv("CI") == null) {
+            maven("https://maven.aliyun.com/repository/public")
+        }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -25,7 +31,9 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
-        maven("https://maven.aliyun.com/repository/public")
+        if (System.getenv("CI") == null) {
+            maven("https://maven.aliyun.com/repository/public")
+        }
         mavenCentral()
     }
 }
