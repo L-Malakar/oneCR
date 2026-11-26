@@ -34,7 +34,4 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:common"))
     implementation(libs.kotlinx.coroutines.core)
-
-    // CaptureProtocol (command builder + probe parser) is pure JVM.
-    testImplementation(libs.junit)
 }
