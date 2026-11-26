@@ -46,19 +46,20 @@ Status legend: [ ] planned, [~] in progress, [x] done.
 - [x] Privilege mode picker in Settings + onboarding (Shizuku ↔ embedded ADB) (v0.3.0)
 - [x] Protocol test coverage: SPAKE2 vs independent reference, HKDF RFC vectors, TLS pairing + shell e2e mocks (v0.3.0)
 - [x] v0.3.1: the v0.2.6 UI/UX layer restored on top of the bridge (the v0.3.0 build had shipped an older UI base); versionCode regression fixed
-- [x] v0.3.2: `app_process` capture-dex spawn hooks shipped (the M3 shell capture dex + streaming channel)
 
-## M3 — Audio capture engine (step 1 in v0.3.2)
-- [x] Shell capture dex (`probe`/`start`/`stop`) — `CaptureMain` spawned via `app_process`, raw PCM streamed over a dedicated second TLS session (`AdbStreamClient`), stop via stdin control word (v0.3.2)
-- [x] Capability probe + source fallback chain — probe report parsed into a VOICE_CALL → downlink+uplink (dual) → MIC chain, silent-source detection included (v0.3.2)
-- [x] WAV writer with patched RIFF sizes + recording journal + orphan sweep (crash-recovery, `recovered` status) (v0.3.2)
-- [x] Recording foreground service with notification controls (specialUse type, live chronometer, Stop action) (v0.3.2)
-- [x] Auto-record on detected cellular calls (Settings switch, default ON) + manual Record-now button on the Dashboard (v0.3.2)
-- [x] Capture diagnostics card in Settings (probe results, fallback chain, rate, notes) (v0.3.2)
-- [ ] Dual downlink+uplink streams (per-speaker files) — protocol ready, recorder support next
-- [ ] VoIP dual-path capture (MediaProjection playback capture + mic) + mixer (and the microphone/mediaProjection FGS types)
+## M3 — Audio capture engine (step 1 in v0.3.3)
+- [x] Streaming WAV writer with patched RIFF sizes (unit-tested header/format/size math) + crash-recovery journal + orphan sweep with in-place header repair (v0.3.3)
+- [x] CaptureStream contract (blocking PCM pipe, granted source/rate) in :privilege:api (v0.3.3)
+- [x] In-process capture opener with a probe-verified fallback chain: VOICE_CALL (silence-verified — Android 11+ silences it for normal apps) → microphone (v0.3.3)
+- [x] RecordingEngine wired end-to-end: probe-selected source → PCM pump → WAV, journal updated with the granted source/rate, Finalizing/Failed states, event-log entries (v0.3.3)
+- [x] Capture foreground service (microphone type) with a Stop action, self-stopping on Idle (v0.3.3)
+- [x] Auto-record on detected cellular calls (Settings switch, default OFF) + manual Record-now button on the Dashboard (v0.3.3)
+- [x] Capture probe card in Settings (working sources + rate + notes, mic permission requested in context) (v0.3.3)
+- [ ] Shell capture dex (`probe`/`start`/`stop`) — `CaptureMain` spawned via `app_process`, raw PCM streamed over the bridge — replaces the in-process VOICE_* path so every device grants the telephony mix (next M3 step)
+- [ ] Dual downlink+uplink streams (per-speaker files)
+- [ ] VoIP dual-path capture (MediaProjection playback capture + mic) + mixer (and the mediaProjection FGS type)
 - [ ] AAC encoding via MediaCodec streaming (WAV retained as option)
-- [ ] Capture diagnostics screen polish: live levels, per-source result table
+- [ ] Capture diagnostics polish: live levels, per-source result table
 - Exit criteria: clean two-sided recordings for cellular and at least one VoIP app; 30-min soak test with flat memory and no ANRs.
 
 ## M4 — Library, storage, search, export
