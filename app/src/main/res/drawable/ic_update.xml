@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Down-arrow-into-tray glyph for the app-update notification (white path,
-     tinted by the notification builder). -->
+<!-- Update notification icon: downward arrow into a tray (24dp material
+     "system update" glyph) — monochrome white like ic_detection so it stays
+     legible in both status-bar tints. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,16.5l4,-4h-3V4h-2v8.5H8L12,16.5zM5,18h14v2H5V18z" />
 </vector>
