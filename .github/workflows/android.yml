@@ -6,7 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Cancel superseded runs on the same branch - saves minutes on every push.
 concurrency:
   group: onecr-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -20,8 +19,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # gradlew is stored without the executable bit (repos pushed from
-      # Windows lose it) - restore it before invoking the wrapper.
       - name: Make gradlew executable
         run: chmod +x gradlew
 
@@ -34,31 +31,29 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          # Disables the dependency graph submission, which can 401 on repos
-          # with restricted default token permissions and fail a green build.
-          dependency-graph: disable
+          dependency-graph: disabled
 
       # Tests first: fail fast before spending time on packaging.
-      - name: Run unit tests
+      - name: Unit tests
         run: ./gradlew test --stacktrace
 
-      - name: Assemble debug APK
+      - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      # CI has no signing keystore: the release APK falls back to debug
-      # signing and is uploaded only as an artifact for smoke testing.
-      # Real releases are signed locally with build.bat and the keystore.
-      - name: Assemble release APK
+      # CI has no keystore: the release build falls back to debug signing so
+      # the artifact stays installable for smoke tests. Release signing for
+      # GitHub Releases is done locally with build.bat (or via secrets later).
+      - name: Build release APK (debug-signed)
         run: ./gradlew assembleRelease --stacktrace
 
-      - name: Upload debug APK artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: oneCR-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
 
-      - name: Upload release APK artifact
+      - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: oneCR-release
