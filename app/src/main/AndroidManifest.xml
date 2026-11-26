@@ -2,12 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        M2 permission set + the M2.5 embedded-ADB bridge. Every permission is
-        requested in context and can be declined — the related feature simply
-        stays off (see PRIVACY.md). RECORD_AUDIO and the projection consent
-        dialog arrive with in-app capture (M3 step 2): the v0.3.2 shell capture
-        runs in the privileged UID-2000 process, which holds its own audio
-        permissions — the app process does not record audio itself.
+        M2 permission set + the M2.5 embedded-ADB bridge + the M3 (v0.3.3)
+        capture and update-checker permissions. Every permission is requested
+        in context and can be declined — the related feature simply stays off
+        (see PRIVACY.md). The projection consent dialog arrives with VoIP
+        capture (next M3 step).
     -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
@@ -18,6 +17,23 @@
     <!-- v0.2.6: restart the 24×7 call watcher after a reboot (only when the
          user opted in during onboarding). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+        M3 capture engine (v0.3.3): the in-process AudioRecord path (probe,
+        mic fallback, diagnostics) records through the microphone. REQUESTED
+        IN CONTEXT — probing/recording without it simply falls to an error,
+        nothing else in the app needs audio.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+    <!--
+        Update checker (v0.3.3): the per-app "Install unknown apps" grant is
+        requested at the moment the user taps Update — oneCR downloads the
+        release APK from GitHub and hands it to the system installer. No
+        other use; see PRIVACY.md.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
         Embedded ADB bridge (M2.5): local TCP sockets to this phone's own adbd
@@ -56,6 +72,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -95,21 +112,40 @@
         </service>
 
         <!--
-            Recording foreground service (M3, v0.3.2): shows the live "Recording"
-            notification with a Stop action while the shell capture session runs.
-            specialUse again — the app process itself never opens the mic (the
-            privileged capture process does), so the microphone FGS type and its
-            Android 14 while-in-use restrictions do not apply here; the type
-            becomes microphone/mediaProjection with the in-app VoIP mix (M3 step 2).
+            Capture foreground service (M3 step 1, v0.3.3). microphone type so
+            the platform privacy chip and notification are honest about audio
+            recording; it stops itself the moment the engine returns to Idle.
         -->
         <service
             android:name="com.lmalakar.onecr.service.recorder.RecordingService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="shell_capture_call_recording_notification" />
-        </service>
+            android:stopWithTask="false"
+            android:foregroundServiceType="microphone" />
+
+        <!--
+            Update notification actions (v0.3.3): Update / Cancel buttons on
+            the "new version available" notification. Not exported — only
+            oneCR's own PendingIntents reach it.
+        -->
+        <receiver
+            android:name="com.lmalakar.onecr.update.UpdateActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!--
+            Update installer bridge (v0.3.3): hands the downloaded release APK
+            (app-private storage) to the system package installer via a
+            content URI — no storage permissions involved.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- v0.2.6: 24×7 watcher auto-restart after boot (opt-in during onboarding). -->
         <receiver
