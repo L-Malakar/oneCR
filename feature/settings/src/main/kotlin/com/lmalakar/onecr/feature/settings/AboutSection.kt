@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -57,12 +58,17 @@ private const val RELEASES_URL = "https://github.com/L-Malakar/oneCR/releases"
  * License to LICENSE and Build to the Releases page, exactly like Project
  * home already did. Two new rows join them: **Developer** (Lalmohan Malakar's
  * GitHub profile) and **Report a bug** (the issue tracker).
+ *
+ * v0.3.3: a **Check for updates** row runs the GitHub release check on
+ * demand — a newer version opens the full update page, an up-to-date answer
+ * shows a toast.
  */
 @Composable
 internal fun AboutSection(
     appInfo: AppInfo,
     logoRes: Int,
     onRerunOnboarding: () -> Unit,
+    onCheckForUpdates: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -162,6 +168,16 @@ internal fun AboutSection(
                 "call participants. Open the license text.",
             showChevron = true,
             onClick = { openUrl(context, LICENSE_URL) },
+        )
+        AboutRow(
+            icon = Icons.Filled.SystemUpdate,
+            title = "Check for updates",
+            detail = "Compares this build (v${appInfo.versionName}) against the " +
+                "latest GitHub release — the update page opens when a newer " +
+                "version exists.",
+            detailColor = MaterialTheme.colorScheme.primary,
+            showChevron = true,
+            onClick = onCheckForUpdates,
         )
         AboutRow(
             icon = Icons.Filled.Architecture,
