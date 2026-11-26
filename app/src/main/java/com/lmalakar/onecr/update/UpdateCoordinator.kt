@@ -9,6 +9,7 @@ import androidx.core.content.FileProvider
 import com.lmalakar.onecr.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+
+/**
+ * State of the manual "Check for updates" tap on the About page (v0.3.5).
+ * The automatic launch check stays silent — this one answers the user.
+ */
+sealed interface ManualCheck {
+    data object Idle : ManualCheck
+    data object Checking : ManualCheck
+    data object UpToDate : ManualCheck
+    data class Failed(val reason: String) : ManualCheck
+}
 
 /** Progress of the APK download shown on the update page. */
 sealed interface DownloadState {
@@ -61,6 +73,10 @@ class UpdateCoordinator(
 
     private val _download = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val download: StateFlow<DownloadState> = _download.asStateFlow()
+
+    private val _manualCheck = MutableStateFlow<ManualCheck>(ManualCheck.Idle)
+    /** Manual check state the About page renders (v0.3.5). */
+    val manualCheck: StateFlow<ManualCheck> = _manualCheck.asStateFlow()
 
     /** True after the user tapped Update but lacked the install grant. */
     private var awaitingInstallGrant = false
@@ -107,9 +123,41 @@ class UpdateCoordinator(
         UpdateNotifier.cancel(appContext)
     }
 
-    /** Re-open the page from the About screen ("Check for updates"). */
+    /** Re-open the page from the About screen when a check found an update. */
     fun showPageIfAvailable() {
         if (_available.value != null) _pageVisible.value = true
+    }
+
+    // ------------------------------------------------------------------
+    // 6 — the manual check (About page button, v0.3.5)
+    // ------------------------------------------------------------------
+
+    /**
+     * The About page's "Check for updates": a real GitHub check on demand.
+     * A newer release raises the full update page (same as the automatic
+     * path); "latest" and failures land in [manualCheck] for the row to
+     * show, and the row resets itself a few seconds later.
+     */
+    fun checkNow() {
+        if (_manualCheck.value == ManualCheck.Checking) return
+        _manualCheck.value = ManualCheck.Checking
+        scope.launch {
+            when (val result = UpdateChecker(fetch).check(currentVersion)) {
+                is UpdateCheck.Available -> {
+                    _manualCheck.value = ManualCheck.Idle
+                    onUpdateFound(result.info)
+                }
+                is UpdateCheck.UpToDate -> {
+                    _manualCheck.value = ManualCheck.UpToDate
+                    // Quietly return the row to its resting state.
+                    delay(MANUAL_CHECK_RESULT_MS)
+                    if (_manualCheck.value == ManualCheck.UpToDate) {
+                        _manualCheck.value = ManualCheck.Idle
+                    }
+                }
+                is UpdateCheck.Failed -> _manualCheck.value = ManualCheck.Failed(result.reason)
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -272,5 +320,8 @@ class UpdateCoordinator(
 
         const val EXTRA_SHOW_UPDATE_PAGE = "com.lmalakar.onecr.extra.SHOW_UPDATE_PAGE"
         private const val REQUEST_SHOW_PAGE = 40_01
+
+        /** How long the "You're on the latest version" line stays visible. */
+        private const val MANUAL_CHECK_RESULT_MS = 5_000L
     }
 }
