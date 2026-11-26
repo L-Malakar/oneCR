@@ -22,11 +22,6 @@ android {
     lint {
         abortOnError = false
     }
-
-    testOptions {
-        // Pure-JVM protocol tests: android.* stubs return defaults instead of throwing.
-        unitTests.isReturnDefaultValues = true
-    }
 }
 
 tasks.withType<KotlinCompile>().configureEach {
@@ -40,14 +35,12 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:model"))
 
-    // The pairing flow needs SSL_export_keying_material ("adb-label"), which the
-    // platform TLS API does not expose — the bundled Conscrypt does.
+    // Bundled Conscrypt (BoringSSL) — the on-device TLS 1.3 pairing needs
+    // SSL_export_keying_material, which the platform SSLStack lacks.
     implementation(libs.conscrypt.android)
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.core)
-    // JVM-side Conscrypt (native TLS + exporter) for the end-to-end pairing test.
     testImplementation(libs.conscrypt.openjdk.uber)
-    testImplementation(project(":core:common"))
 }
