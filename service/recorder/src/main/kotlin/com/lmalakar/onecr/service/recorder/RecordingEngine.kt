@@ -145,19 +145,24 @@ class RecordingEngine(
             journal.save(dir)
 
             val spec = CaptureStreamSpec(source = source, sampleRateHz = requestedRate)
-            val stream = provider().openCaptureStream(spec)
+            val stream = provider().openCaptureStream(appContext, spec)
 
             val granted = stream.grantedSampleRateHz.takeIf { it > 0 } ?: requestedRate
-            val fileName = streamFile(source)
+            val actualSource = stream.source
+            val fileName = streamFile(actualSource)
             val wav = WavWriter(File(File(dir, StorageLayout.RAW_SUBDIR), fileName), granted)
-            journal = journal.copy(sampleRateHz = granted, wavFile = fileName)
+            journal = journal.copy(
+                sampleRateHz = granted,
+                wavFile = fileName,
+                captureSource = actualSource.name,
+            )
 
-            val active = Session(journal, dir, wav, stream, trigger, source)
+            val active = Session(journal, dir, wav, stream, trigger, actualSource)
             session = active
 
             _state.value = UiState.Recording(
                 recordingId = id,
-                source = source,
+                source = actualSource,
                 startedAtMillis = startedAt,
                 direction = direction,
                 phone = phone,
