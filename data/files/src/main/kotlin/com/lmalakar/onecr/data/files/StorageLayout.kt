@@ -28,8 +28,6 @@ object StorageLayout {
 
     const val DOWNLINK_STREAM = "downlink.wav"
     const val UPLINK_STREAM = "uplink.wav"
-    /** Mixed cellular stream captured through the fallback chain (M3 step 1). */
-    const val CALL_STREAM = "call.wav"
     const val MIC_STREAM = "mic.wav"
     const val PLAYBACK_STREAM = "playback.wav"
     const val FINAL_WAV = "audio.wav"
