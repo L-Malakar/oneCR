@@ -142,7 +142,7 @@ private fun KindBadge(kind: String) {
     }
     val isError = kind == EventLogEntry.KIND_ERROR
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(999.dp),
         color = if (isError) {
             MaterialTheme.colorScheme.errorContainer
         } else {
