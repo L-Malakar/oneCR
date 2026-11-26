@@ -1,15 +1,11 @@
 package com.lmalakar.onecr.feature.settings
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -45,12 +41,10 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -81,16 +75,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
 import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
 import com.lmalakar.onecr.core.designsystem.motion.MOTION_ENTER_MS
 import com.lmalakar.onecr.core.designsystem.motion.MOTION_EXIT_MS
-import com.lmalakar.onecr.core.model.AppInfo
 import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.EventLogEntry
-import com.lmalakar.onecr.privilege.api.CaptureCapability
 import com.lmalakar.onecr.privilege.api.PrivilegeAction
 import com.lmalakar.onecr.privilege.api.PrivilegeHealth
 import com.lmalakar.onecr.privilege.api.PrivilegeState
@@ -115,28 +106,22 @@ private fun themeSegmentLabel(mode: ThemeMode): String = when (mode) {
 }
 
 /**
- * v0.2.2 settings: the same sections as v0.2.1 (theme, bridge, permissions,
- * event log, about) grouped under section headers, with a live permission
- * summary on the Permission center link.
+ * v0.2.2 settings: theme, bridge, permissions and event log grouped under
+ * section headers, with a live permission summary on the Permission center
+ * link.
  *
  * v0.2.6: the panel grew a modern look — every card leads with a colored icon
  * tile, the theme choice became a three-way segmented control with icons, and
  * a new Animations switch (default ON) gates every transition in the app. A
  * battery-optimization card under "Keep alive" protects the 24×7 watcher, and
- * the Permission center / Event log pages now slide in and out.
+ * the Permission center / Event log pages slide in and out.
  *
- * v0.3.1: the Privilege bridge card carries the v0.3.0 mode picker — embedded
- * ADB (no extra app) or Shizuku — above the live bridge status, so the route
- * can be switched without re-running the wizard.
- *
- * v0.3.3: a Capture section joins the panel — the auto-record switch (M3
- * step 1) and a capture probe card that reports which audio sources actually
- * work on this phone (the fallback chain the recorder uses).
+ * v0.3.4: the About section moved out — it is now a standalone page behind
+ * the ⓘ icon in the top bar (see AboutScreen). The remaining copy was
+ * trimmed to a minimal one-line-per-control style.
  */
 @Composable
 fun SettingsScreen(
-    appInfo: AppInfo,
-    logoRes: Int,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
     permissions: StateFlow<PermissionSnapshot>,
@@ -153,10 +138,6 @@ fun SettingsScreen(
     onSelectPrivilegeMode: (String) -> Unit,
     onClearEventLog: () -> Unit,
     onRerunOnboarding: () -> Unit,
-    autoRecordEnabled: Boolean,
-    onAutoRecordChange: (Boolean) -> Unit,
-    onProbeCapture: suspend () -> CaptureCapability,
-    onCheckForUpdates: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var page by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
@@ -196,8 +177,6 @@ fun SettingsScreen(
     ) { target ->
         when (target) {
             SettingsPage.ROOT -> RootSettings(
-                appInfo = appInfo,
-                logoRes = logoRes,
                 privilegeHealth = privilegeHealth,
                 recentEvents = recentEvents,
                 permissions = permissions,
@@ -212,10 +191,6 @@ fun SettingsScreen(
                 selectedPrivilegeMode = selectedPrivilegeMode,
                 onSelectPrivilegeMode = onSelectPrivilegeMode,
                 onRerunOnboarding = onRerunOnboarding,
-                autoRecordEnabled = autoRecordEnabled,
-                onAutoRecordChange = onAutoRecordChange,
-                onProbeCapture = onProbeCapture,
-                onCheckForUpdates = onCheckForUpdates,
                 onOpenPermissions = { page = SettingsPage.PERMISSIONS },
                 onOpenEventLog = { page = SettingsPage.EVENT_LOG },
                 scrollState = rootScrollState,
@@ -245,8 +220,6 @@ fun SettingsScreen(
 
 @Composable
 private fun RootSettings(
-    appInfo: AppInfo,
-    logoRes: Int,
     privilegeHealth: StateFlow<PrivilegeHealth>,
     recentEvents: StateFlow<List<EventLogEntry>>,
     permissions: StateFlow<PermissionSnapshot>,
@@ -261,10 +234,6 @@ private fun RootSettings(
     selectedPrivilegeMode: String,
     onSelectPrivilegeMode: (String) -> Unit,
     onRerunOnboarding: () -> Unit,
-    autoRecordEnabled: Boolean,
-    onAutoRecordChange: (Boolean) -> Unit,
-    onProbeCapture: suspend () -> CaptureCapability,
-    onCheckForUpdates: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenEventLog: () -> Unit,
     scrollState: ScrollState,
@@ -306,7 +275,7 @@ private fun RootSettings(
                     )
                 }
                 Text(
-                    "\"System\" follows your phone's dark-mode setting.",
+                    "Follows the phone's dark mode",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -354,8 +323,7 @@ private fun RootSettings(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            "Smooth motion across screens and controls. " +
-                                "Turn off for an instant, minimal feel.",
+                            "Screen and control motion",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -404,13 +372,13 @@ private fun RootSettings(
                 // health monitor on the new bridge.
                 ModeRow(
                     title = "Embedded ADB",
-                    detail = "No extra app — pairs with Wireless debugging (Android 11+)",
+                    detail = "Wireless debugging · no extra app · Android 11+",
                     selected = selectedPrivilegeMode == "EMBEDDED_ADB",
                     onClick = { onSelectPrivilegeMode("EMBEDDED_ADB") },
                 )
                 ModeRow(
                     title = "Shizuku",
-                    detail = "Uses the separate Shizuku app (Android 8+)",
+                    detail = "Separate app · Android 8+",
                     selected = selectedPrivilegeMode == "SHIZUKU",
                     onClick = { onSelectPrivilegeMode("SHIZUKU") },
                 )
@@ -445,7 +413,7 @@ private fun RootSettings(
                     if (verifyResult == null) {
                         OutlinedButton(onClick = {
                             verifyScope.launch { verifyResult = onVerifyBridge() }
-                        }) { Text("Verify bridge (runs `id`)") }
+                        }) { Text("Verify bridge") }
                     } else {
                         val result = verifyResult
                         Text(
@@ -463,13 +431,6 @@ private fun RootSettings(
             }
         }
 
-        SectionHeader("Capture (M3)")
-        CaptureCards(
-            autoRecordEnabled = autoRecordEnabled,
-            onAutoRecordChange = onAutoRecordChange,
-            onProbeCapture = onProbeCapture,
-        )
-
         SectionHeader("Keep alive")
         BatteryCard()
 
@@ -478,9 +439,9 @@ private fun RootSettings(
             icon = Icons.Filled.Notifications,
             title = "Permission center",
             detail = if (permissionSnapshot.allGranted) {
-                "All 5 grants in place — tap for details"
+                "All 5 grants in place"
             } else {
-                "${5 - permissionSnapshot.missingCount} of 5 granted — grant the rest one by one"
+                "${5 - permissionSnapshot.missingCount} of 5 granted"
             },
             onClick = onOpenPermissions,
         )
@@ -488,171 +449,23 @@ private fun RootSettings(
         SettingsLink(
             icon = Icons.Filled.List,
             title = "Event log",
-            detail = "${events.size} recent detection events (local only)",
+            detail = "${events.size} events · local only",
             onClick = onOpenEventLog,
         )
 
         SectionHeader("Coming next")
         FutureCard(
             icon = Icons.Filled.Star,
-            title = "Models",
-            detail = "whisper.cpp + llama.cpp download, sideload, delete",
-            milestone = "M5",
+            title = "Recorder",
+            detail = "WAV writer + recording journal landed in v0.3.4",
+            milestone = "M3",
         )
         FutureCard(
             icon = Icons.Filled.Clear,
             title = "Storage and export",
-            detail = "Retention policy, export location, storage stats",
+            detail = "Retention, export, storage stats",
             milestone = "M4",
         )
-
-        SectionHeader("About")
-        AboutSection(
-            appInfo = appInfo,
-            logoRes = logoRes,
-            onRerunOnboarding = onRerunOnboarding,
-            onCheckForUpdates = onCheckForUpdates,
-        )
-    }
-}
-
-// ---------------------------------------------------------------------
-// Capture (M3 step 1, v0.3.3) — auto-record + capability probe
-// ---------------------------------------------------------------------
-
-/**
- * Two cards:
- *  - **Auto-record calls** — when the watcher sees a cellular call go active
- *    and this switch is on, the capture engine starts recording through its
- *    probe-verified fallback chain (VOICE_CALL → mic) and stops when the call
- *    ends. Manual "Record now" on the Dashboard works regardless.
- *  - **Capture probe** — opens the candidate sources once and reports which
- *    ones return real audio (some OEMs silence VOICE_CALL for normal apps).
- *    The probe needs the microphone permission the same way recording does.
- */
-@Composable
-private fun CaptureCards(
-    autoRecordEnabled: Boolean,
-    onAutoRecordChange: (Boolean) -> Unit,
-    onProbeCapture: suspend () -> CaptureCapability,
-) {
-    val context = LocalContext.current
-    val probeScope = rememberCoroutineScope()
-    var probeResult by remember { mutableStateOf<CaptureCapability?>(null) }
-    var probeFailed by remember { mutableStateOf<String?>(null) }
-    var probeBusy by remember { mutableStateOf(false) }
-
-    fun runProbe() {
-        probeBusy = true
-        probeFailed = null
-        probeScope.launch {
-            runCatching { onProbeCapture() }
-                .onSuccess { probeResult = it }
-                .onFailure { probeFailed = it.message ?: it.javaClass.simpleName }
-            probeBusy = false
-        }
-    }
-
-    val micLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) runProbe()
-    }
-
-    fun startProbe() {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) runProbe() else micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                IconTile(Icons.Filled.Mic)
-                Text(
-                    "Call capture",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Auto-record calls",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        "Starts recording when a cellular call goes active and stops " +
-                            "when it ends. Recordings stay on this device only.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = autoRecordEnabled, onCheckedChange = onAutoRecordChange)
-            }
-
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
-
-            Text(
-                "Capture probe",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "Checks which audio sources this phone actually opens (VOICE_CALL, " +
-                    "microphone) — the chain the recorder walks before recording.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            if (probeResult != null || probeFailed != null) {
-                val result = probeResult
-                Text(
-                    text = when {
-                        probeFailed != null -> "Probe failed: $probeFailed"
-                        result != null -> "Working sources: " +
-                            (result.workingSources.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name }
-                                ?: "none usable in-app") +
-                            " · ${result.sampleRateHz} Hz"
-                        else -> ""
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (probeFailed != null) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-                if (result?.notes?.isNotBlank() == true) {
-                    Text(
-                        result.notes,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            OutlinedButton(onClick = ::startProbe, enabled = !probeBusy) {
-                Text(if (probeBusy) "Probing…" else "Run capture probe")
-            }
-        }
     }
 }
 
@@ -692,7 +505,7 @@ private fun BatteryCard() {
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "oneCR is exempt — the watcher keeps running with the app closed.",
+                        "Exempt — the watcher survives app close",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -727,8 +540,7 @@ private fun BatteryCard() {
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                     Text(
-                        "Your ROM can pause the 24×7 watcher when oneCR is closed. " +
-                            "Exempting it keeps the \"Watching for calls\" notification alive.",
+                        "Your ROM may pause the watcher when oneCR is closed",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
@@ -743,7 +555,7 @@ private fun BatteryCard() {
                             }
                         },
                     ) {
-                        Text("Allow background running")
+                        Text("Allow")
                     }
                 }
             }
