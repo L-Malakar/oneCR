@@ -43,7 +43,6 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -174,7 +173,6 @@ fun DashboardScreen(
                     it.kind == EventLogEntry.KIND_CALL || it.kind == EventLogEntry.KIND_VOIP
                 }.toString(),
                 label = "Calls seen",
-                supporting = "cellular + VoIP",
                 modifier = Modifier.weight(1f),
             )
             StatTile(
@@ -191,7 +189,6 @@ fun DashboardScreen(
                 icon = Icons.Filled.List,
                 value = recentEvents.size.toString(),
                 label = "Events logged",
-                supporting = "rolling window",
                 modifier = Modifier.weight(1f),
             )
             StatTile(
@@ -217,7 +214,7 @@ fun DashboardScreen(
         if (bridgeNeedsAttention) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer,
             ) {
                 Row(
@@ -252,7 +249,7 @@ fun DashboardScreen(
         if (!batteryExempt) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer,
             ) {
                 Row(
@@ -451,7 +448,7 @@ private fun CommandCard(
 @Composable
 private fun InfoChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(999.dp),
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
     ) {
         Text(
@@ -514,17 +511,25 @@ private fun StatusPill(live: Boolean) {
 // Stat tiles
 // ---------------------------------------------------------------------
 
-/** Compact number tile for the "At a glance" grid. */
+/**
+ * Compact number tile for the "At a glance" grid (v0.3.5 minimal restyle):
+ * a flat tonal surface — no elevation, no shadow — with one icon, one number
+ * and one label.
+ */
 @Composable
 private fun StatTile(
     icon: ImageVector,
     value: String,
     label: String,
-    supporting: String,
+    supporting: String? = null,
     accent: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    ElevatedCard(modifier = modifier.fillMaxWidth()) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -569,11 +574,13 @@ private fun StatTile(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = supporting,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-            )
+            if (supporting != null) {
+                Text(
+                    text = supporting,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                )
+            }
         }
     }
 }
@@ -590,7 +597,7 @@ private fun ActivityCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -652,7 +659,7 @@ private fun KindChip(kind: String) {
     }
     val isError = kind == EventLogEntry.KIND_ERROR
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(999.dp),
         color = if (isError) {
             MaterialTheme.colorScheme.errorContainer
         } else {
@@ -694,7 +701,7 @@ private fun RoadmapCard() {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -708,7 +715,7 @@ private fun RoadmapCard() {
                     modifier = Modifier.weight(1f),
                 )
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(999.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Text(
