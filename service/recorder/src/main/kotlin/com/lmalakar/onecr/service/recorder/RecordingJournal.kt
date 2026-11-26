@@ -127,6 +127,12 @@ data class RecordingJournal(
 
                 val wav = File(dir, journal.wavFile.ifBlank { StorageLayout.FINAL_WAV })
                 val bytes = (wav.length() - WavWriter.HEADER_BYTES).coerceAtLeast(0)
+                if (wav.exists() && bytes > 0) {
+                    // The killed process never patched the sizes — fix the
+                    // RIFF/data lengths from the real file size so any player
+                    // (and the future M4 library screen) can open it.
+                    WavWriter.patchHeaderSizes(wav)
+                }
                 val patch = journal.copy(
                     status = STATUS_RECOVERED,
                     endedAtMillis = if (journal.endedAtMillis > 0) journal.endedAtMillis else timeNowMillis,
