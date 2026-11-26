@@ -45,8 +45,6 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":data:files"))
     implementation(project(":privilege:api"))
-    // v0.3.2: the Capture card reads the recorder's live UiState (M3).
-    implementation(project(":service:recorder"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material.icons.extended)
