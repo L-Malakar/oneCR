@@ -113,16 +113,6 @@ interface PrivilegeProvider {
     suspend fun probeCapture(): CaptureCapability
 
     /**
-     * Open a live PCM capture stream from the privileged capture process (M3).
-     * The stream is backed by a dedicated channel (a second TLS session for the
-     * embedded-ADB bridge, a binder pipe for Shizuku) so command traffic on the
-     * main bridge — health pings, shell checks — keeps flowing while audio
-     * streams. Implementations must return promptly with a stream whose
-     * [CaptureStream.pcm] blocks until audio (or EOF) arrives.
-     */
-    suspend fun openCaptureStream(spec: CaptureStreamSpec): CaptureStream
-
-    /**
      * Listener invoked whenever the provider notices a state change on its own
      * (binder death, permission revoked, Shizuku stopped). The monitor re-pings on it.
      */
