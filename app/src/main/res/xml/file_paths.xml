@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider paths for the v0.3.3 update installer: the downloaded release
+    APK lives in app-specific storage ("updates/" under the external
+    files dir, with an internal fallback) and is shared with the system
+    package installer through a content URI — no storage permissions.
+-->
+<paths>
+    <external-files-path
+        name="updates_external"
+        path="updates/" />
+    <files-path
+        name="updates_internal"
+        path="updates/" />
+</paths>
