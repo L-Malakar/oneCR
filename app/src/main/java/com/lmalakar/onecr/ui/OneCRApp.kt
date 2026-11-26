@@ -77,6 +77,8 @@ import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
 import com.lmalakar.onecr.ui.dashboard.DashboardScreen
 import com.lmalakar.onecr.ui.notifications.NotificationCenterScreen
+import com.lmalakar.onecr.ui.update.UpdatePage
+import com.lmalakar.onecr.update.UpdateState
 
 /** Model imports kept off the hot path; icons come from material-icons-core. */
 private enum class TopLevelTab(val label: String, val icon: ImageVector) {
@@ -143,6 +145,11 @@ fun OneCRApp(container: AppContainer) {
     var showNotificationCenter by rememberSaveable { mutableStateOf(false) }
     val notificationModel by container.notificationCenter.model.collectAsState()
 
+    // v0.3.3: the update page is a full-screen Dialog rendered ABOVE everything
+    // — dashboard, wizard, notification center — whenever it is requested
+    // (notification tap, About → Check for updates, or first discovery on open).
+    val updatePageVisible by container.updateManager.pageVisible.collectAsState()
+
     // Visited-tab history (most recent last, never contains the current tab).
     var tabHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var selectedTabName by rememberSaveable { mutableStateOf(TopLevelTab.DASHBOARD.name) }
@@ -190,6 +197,15 @@ fun OneCRApp(container: AppContainer) {
                 }
             }
         }
+    }
+
+    // The v0.3.3 update page — a separate window, so it floats above the
+    // onboarding wizard and the shell alike ("above everything"). Its own
+    // BackHandler treats system back as Cancel (snooze + close).
+    if (updatePageVisible &&
+        container.updateManager.updateState.value is UpdateState.Available
+    ) {
+        UpdatePage(manager = container.updateManager)
     }
 
     if (showOnboarding) {
@@ -387,15 +403,16 @@ fun OneCRApp(container: AppContainer) {
                         onVerifyBridge = { container.privilegeProvider.runShellCommand("id") },
                         selectedPrivilegeMode = container.privilegeProvider.mode.name,
                         onSelectPrivilegeMode = { modeName -> container.setPrivilegeMode(modeName) },
-                        recorderState = container.recorder.state,
-                        onRunCaptureProbe = { container.recorder.probeNow() },
-                        autoRecordEnabled = container.settings.autoRecordEnabled,
-                        onAutoRecordChange = { enabled -> container.settings.autoRecordEnabled = enabled },
                         onClearEventLog = container.detection::clearLog,
                         onRerunOnboarding = {
                             onboardingIsRerun = true
                             showOnboarding = true
                         },
+                        // v0.3.3 capture engine (M3 step 1) + update checker.
+                        autoRecordEnabled = container.autoRecordCalls.value,
+                        onAutoRecordChange = container::setAutoRecordCalls,
+                        onProbeCapture = { container.recordingEngine.probeNow() },
+                        onCheckForUpdates = { container.updateManager.checkNow(force = true) },
                         modifier = Modifier.padding(innerPadding),
                     )
             }
