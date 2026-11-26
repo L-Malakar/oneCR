@@ -1,15 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    FileProvider paths for the v0.3.3 update installer: the downloaded release
-    APK lives in app-specific storage ("updates/" under the external
-    files dir, with an internal fallback) and is shared with the system
-    package installer through a content URI — no storage permissions.
--->
+<!-- FileProvider share paths for the in-app updater (v0.3.3): APKs are
+     downloaded into the app-private files/updates directory and handed to
+     the system installer through a content URI. -->
 <paths>
-    <external-files-path
-        name="updates_external"
-        path="updates/" />
     <files-path
-        name="updates_internal"
+        name="updates"
         path="updates/" />
 </paths>
