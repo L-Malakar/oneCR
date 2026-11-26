@@ -4,6 +4,70 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.3.5] — 2026-11-26
+
+The reliability release: a CI that finally runs, a manual update check you
+can actually test, and a flat minimal pass over the main screens. Built on
+the true v0.3.4 chassis — no chassis changes.
+
+### Fixed
+- **GitHub Actions "keep failing" — root cause found and removed (v0.3.5
+  task 1).** Every push since v0.3.4 produced a run that failed in seconds
+  with **zero jobs**, named `.github/workflows/android.yml` instead of the
+  workflow's title. That is the signature of a file GitHub cannot parse:
+  the release job's step name contained an unquoted colon —
+  `- name: Guard: release notes for this tag must exist` — and a plain
+  YAML scalar may not contain `: `. One line, every build dead. The
+  workflow is now a clean rewrite (see below), validated as YAML and kept
+  100% ASCII so a web-editor upload can never introduce invisible
+  characters again.
+- **The tag-release job is gone on purpose.** CI has no signing keystore,
+  so an auto-published release APK would have been debug-signed and unable
+  to install over the real release. Releases stay hand-built with
+  `build.bat` + the local keystore; CI builds and tests only.
+
+### Added
+- **Manual "Check for updates" on the About page (v0.3.5 task 3).** A new
+  row under the brand header runs a real `releases/latest` check on demand:
+  - checking shows an inline spinner ("Talking to GitHub…");
+  - up to date answers right in the row — "You're on the latest version" —
+    and quietly resets a few seconds later;
+  - offline or rate-limited shows "Couldn't reach GitHub — tap to retry";
+  - a newer release raises the full update page and the notification
+    exactly like the automatic launch check (and re-raises it even after a
+    previous Cancel, since the update is session-sticky by design).
+  - `UpdateCoordinator` gained the `ManualCheck` state machine and
+    `checkNow()`; the automatic launch check is unchanged.
+- **`workflow_dispatch` on the CI workflow** — a "Run workflow" button on
+  the Actions page, so CI can be exercised without pushing.
+
+### Changed
+- **Flat minimal design pass (v0.3.5 task 2).** The v0.2.6-grade chassis
+  (theme engine, animations, icon tiles, motion switch) is untouched; the
+  visual noise was:
+  - dashboard stat tiles are flat tonal surfaces now — no elevation, no
+    shadow — and their decorative captions ("cellular + VoIP", "rolling
+    window") are gone; state captions stay;
+  - corner radii are unified: hero 20 dp, cards 16 dp, rows 14 dp, and
+    every chip (version, kind, milestone) is a full pill;
+  - the same treatment reached Settings' milestone chips and the event
+    log's kind chips.
+  - **The notification center and the setup wizard are intentionally
+    untouched**, as requested.
+- **CI workflow rewrite.** Renamed `oneCR CI`: one `build` job — checkout,
+  `chmod +x gradlew` (the repo stores it non-executable), JDK 17 (temurin),
+  Gradle with the dependency-graph submission disabled, unit tests, debug +
+  release APK artifacts — plus concurrency cancel and a 30-minute cap. The
+  file is pure ASCII, newline-terminated, and parses clean.
+- Version bumped to 0.3.5 (versionCode 13).
+
+### Note for the updater
+- GitHub's `releases/latest` — the endpoint both the automatic and the new
+  manual check use — **excludes releases marked "pre-release"**. All of
+  v0.2.1–v0.2.4 are pre-releases, so the endpoint answered 404 and no check
+  could ever find anything. Publish v0.3.5 as a **full release** (leave
+  "Set as pre-release" unchecked) and both checks start working.
+
 ## [0.3.4] — 2026-11-26
 
 The updater release, plus the About page the Settings list always wanted to
