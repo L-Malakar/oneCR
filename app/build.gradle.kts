@@ -106,7 +106,6 @@ dependencies {
     implementation(project(":privilege:shizuku"))
     implementation(project(":privilege:embedded-adb"))
     implementation(project(":service:detection"))
-    implementation(project(":service:recorder"))
     implementation(project(":data:files"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:library"))
