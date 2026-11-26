@@ -1,11 +1,15 @@
 package com.lmalakar.onecr.feature.settings
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -44,9 +48,9 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -77,12 +81,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
 import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
 import com.lmalakar.onecr.core.designsystem.motion.MOTION_ENTER_MS
 import com.lmalakar.onecr.core.designsystem.motion.MOTION_EXIT_MS
 import com.lmalakar.onecr.core.model.AppInfo
-import com.lmalakar.onecr.core.model.CaptureSource
 import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.EventLogEntry
@@ -91,7 +95,6 @@ import com.lmalakar.onecr.privilege.api.PrivilegeAction
 import com.lmalakar.onecr.privilege.api.PrivilegeHealth
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.privilege.api.ShellCommandResult
-import com.lmalakar.onecr.service.recorder.RecordingEngine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -125,6 +128,10 @@ private fun themeSegmentLabel(mode: ThemeMode): String = when (mode) {
  * v0.3.1: the Privilege bridge card carries the v0.3.0 mode picker — embedded
  * ADB (no extra app) or Shizuku — above the live bridge status, so the route
  * can be switched without re-running the wizard.
+ *
+ * v0.3.3: a Capture section joins the panel — the auto-record switch (M3
+ * step 1) and a capture probe card that reports which audio sources actually
+ * work on this phone (the fallback chain the recorder uses).
  */
 @Composable
 fun SettingsScreen(
@@ -144,12 +151,12 @@ fun SettingsScreen(
     onVerifyBridge: suspend () -> ShellCommandResult,
     selectedPrivilegeMode: String,
     onSelectPrivilegeMode: (String) -> Unit,
-    recorderState: StateFlow<RecordingEngine.UiState>,
-    onRunCaptureProbe: suspend () -> CaptureCapability,
-    autoRecordEnabled: Boolean,
-    onAutoRecordChange: (Boolean) -> Unit,
     onClearEventLog: () -> Unit,
     onRerunOnboarding: () -> Unit,
+    autoRecordEnabled: Boolean,
+    onAutoRecordChange: (Boolean) -> Unit,
+    onProbeCapture: suspend () -> CaptureCapability,
+    onCheckForUpdates: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var page by rememberSaveable { mutableStateOf(SettingsPage.ROOT) }
@@ -204,11 +211,11 @@ fun SettingsScreen(
                 onVerifyBridge = onVerifyBridge,
                 selectedPrivilegeMode = selectedPrivilegeMode,
                 onSelectPrivilegeMode = onSelectPrivilegeMode,
-                recorderState = recorderState,
-                onRunCaptureProbe = onRunCaptureProbe,
+                onRerunOnboarding = onRerunOnboarding,
                 autoRecordEnabled = autoRecordEnabled,
                 onAutoRecordChange = onAutoRecordChange,
-                onRerunOnboarding = onRerunOnboarding,
+                onProbeCapture = onProbeCapture,
+                onCheckForUpdates = onCheckForUpdates,
                 onOpenPermissions = { page = SettingsPage.PERMISSIONS },
                 onOpenEventLog = { page = SettingsPage.EVENT_LOG },
                 scrollState = rootScrollState,
@@ -253,11 +260,11 @@ private fun RootSettings(
     onVerifyBridge: suspend () -> ShellCommandResult,
     selectedPrivilegeMode: String,
     onSelectPrivilegeMode: (String) -> Unit,
-    recorderState: StateFlow<RecordingEngine.UiState>,
-    onRunCaptureProbe: suspend () -> CaptureCapability,
+    onRerunOnboarding: () -> Unit,
     autoRecordEnabled: Boolean,
     onAutoRecordChange: (Boolean) -> Unit,
-    onRerunOnboarding: () -> Unit,
+    onProbeCapture: suspend () -> CaptureCapability,
+    onCheckForUpdates: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenEventLog: () -> Unit,
     scrollState: ScrollState,
@@ -457,11 +464,10 @@ private fun RootSettings(
         }
 
         SectionHeader("Capture (M3)")
-        CaptureCard(
-            recorderState = recorderState.collectAsState().value,
+        CaptureCards(
             autoRecordEnabled = autoRecordEnabled,
             onAutoRecordChange = onAutoRecordChange,
-            onRunProbe = onRunCaptureProbe,
+            onProbeCapture = onProbeCapture,
         )
 
         SectionHeader("Keep alive")
@@ -505,29 +511,59 @@ private fun RootSettings(
             appInfo = appInfo,
             logoRes = logoRes,
             onRerunOnboarding = onRerunOnboarding,
+            onCheckForUpdates = onCheckForUpdates,
         )
     }
 }
 
 // ---------------------------------------------------------------------
-// Capture (M3, v0.3.2)
+// Capture (M3 step 1, v0.3.3) — auto-record + capability probe
 // ---------------------------------------------------------------------
 
 /**
- * The capture diagnostics card: the auto-record switch, the live recorder
- * state and the audio-source probe (which privileged sources really return
- * audio on this device — the fallback chain the recorder follows).
+ * Two cards:
+ *  - **Auto-record calls** — when the watcher sees a cellular call go active
+ *    and this switch is on, the capture engine starts recording through its
+ *    probe-verified fallback chain (VOICE_CALL → mic) and stops when the call
+ *    ends. Manual "Record now" on the Dashboard works regardless.
+ *  - **Capture probe** — opens the candidate sources once and reports which
+ *    ones return real audio (some OEMs silence VOICE_CALL for normal apps).
+ *    The probe needs the microphone permission the same way recording does.
  */
 @Composable
-private fun CaptureCard(
-    recorderState: RecordingEngine.UiState,
+private fun CaptureCards(
     autoRecordEnabled: Boolean,
     onAutoRecordChange: (Boolean) -> Unit,
-    onRunProbe: suspend () -> CaptureCapability,
+    onProbeCapture: suspend () -> CaptureCapability,
 ) {
+    val context = LocalContext.current
     val probeScope = rememberCoroutineScope()
     var probeResult by remember { mutableStateOf<CaptureCapability?>(null) }
-    var probing by remember { mutableStateOf(false) }
+    var probeFailed by remember { mutableStateOf<String?>(null) }
+    var probeBusy by remember { mutableStateOf(false) }
+
+    fun runProbe() {
+        probeBusy = true
+        probeFailed = null
+        probeScope.launch {
+            runCatching { onProbeCapture() }
+                .onSuccess { probeResult = it }
+                .onFailure { probeFailed = it.message ?: it.javaClass.simpleName }
+            probeBusy = false
+        }
+    }
+
+    val micLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) runProbe()
+    }
+
+    fun startProbe() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) runProbe() else micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -542,54 +578,18 @@ private fun CaptureCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                val recording = recorderState is RecordingEngine.UiState.Recording
-                IconTile(
-                    if (recording) Icons.Filled.CheckCircle else Icons.Filled.Mic,
-                    containerColor = if (recording) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                    iconColor = if (recording) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    },
+                IconTile(Icons.Filled.Mic)
+                Text(
+                    "Call capture",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
                 )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Call capture",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = when (recorderState) {
-                            is RecordingEngine.UiState.Recording ->
-                                "Recording now — ${recorderState.source.name.lowercase().replace('_', ' ')}"
-
-                            is RecordingEngine.UiState.Finalizing -> "Saving the file…"
-                            is RecordingEngine.UiState.Failed -> "Last attempt failed: ${recorderState.message}"
-                            RecordingEngine.UiState.Idle -> "Idle — ready to record"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-            // Auto-record: start the shell recorder when a cellular call starts.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.PhoneInTalk,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "Auto-record calls",
@@ -597,8 +597,8 @@ private fun CaptureCard(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        "Start recording automatically when a call connects. " +
-                            "The Dashboard's Record-now button works regardless.",
+                        "Starts recording when a cellular call goes active and stops " +
+                            "when it ends. Recordings stay on this device only.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -606,46 +606,51 @@ private fun CaptureCard(
                 Switch(checked = autoRecordEnabled, onCheckedChange = onAutoRecordChange)
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
 
             Text(
-                "Audio probe — opens the privileged capture sources for a moment " +
-                    "and reports which ones really return audio on this device.",
+                "Capture probe",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                "Checks which audio sources this phone actually opens (VOICE_CALL, " +
+                    "microphone) — the chain the recorder walks before recording.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            val result = probeResult
-            if (result == null) {
-                OutlinedButton(
-                    onClick = {
-                        probing = true
-                        probeScope.launch {
-                            probeResult = runCatching { onRunProbe() }.getOrNull()
-                            probing = false
-                        }
-                    },
-                    enabled = !probing,
-                ) {
-                    Text(if (probing) "Probing sources…" else "Run audio probe")
-                }
-            } else {
+            if (probeResult != null || probeFailed != null) {
+                val result = probeResult
                 Text(
-                    text = buildString {
-                        append(result.notes)
-                        if (result.workingSources.isNotEmpty()) {
-                            append(" · ")
-                            append("${result.sampleRateHz} Hz")
-                        }
+                    text = when {
+                        probeFailed != null -> "Probe failed: $probeFailed"
+                        result != null -> "Working sources: " +
+                            (result.workingSources.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name }
+                                ?: "none usable in-app") +
+                            " · ${result.sampleRateHz} Hz"
+                        else -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (result.workingSources.isEmpty()) {
+                    color = if (probeFailed != null) {
                         MaterialTheme.colorScheme.error
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
-                TextButton(onClick = { probeResult = null }) { Text("Re-run probe") }
+                if (result?.notes?.isNotBlank() == true) {
+                    Text(
+                        result.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            OutlinedButton(onClick = ::startProbe, enabled = !probeBusy) {
+                Text(if (probeBusy) "Probing…" else "Run capture probe")
             }
         }
     }
