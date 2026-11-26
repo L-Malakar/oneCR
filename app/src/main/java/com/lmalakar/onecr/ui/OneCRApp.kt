@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -70,6 +71,7 @@ import com.lmalakar.onecr.core.designsystem.theme.BadgeInk
 import com.lmalakar.onecr.feature.library.LibraryScreen
 import com.lmalakar.onecr.feature.onboarding.FoundPairingService
 import com.lmalakar.onecr.feature.onboarding.OnboardingScreen
+import com.lmalakar.onecr.feature.settings.AboutScreen
 import com.lmalakar.onecr.feature.settings.SettingsScreen
 import com.lmalakar.onecr.privilege.api.PrivilegeAction
 import com.lmalakar.onecr.privilege.api.PrivilegeMode
@@ -77,8 +79,7 @@ import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
 import com.lmalakar.onecr.ui.dashboard.DashboardScreen
 import com.lmalakar.onecr.ui.notifications.NotificationCenterScreen
-import com.lmalakar.onecr.ui.update.UpdatePage
-import com.lmalakar.onecr.update.UpdateState
+import com.lmalakar.onecr.ui.update.UpdateScreen
 
 /** Model imports kept off the hot path; icons come from material-icons-core. */
 private enum class TopLevelTab(val label: String, val icon: ImageVector) {
@@ -143,12 +144,8 @@ fun OneCRApp(container: AppContainer) {
         )
     }
     var showNotificationCenter by rememberSaveable { mutableStateOf(false) }
+    var showAbout by rememberSaveable { mutableStateOf(false) }
     val notificationModel by container.notificationCenter.model.collectAsState()
-
-    // v0.3.3: the update page is a full-screen Dialog rendered ABOVE everything
-    // — dashboard, wizard, notification center — whenever it is requested
-    // (notification tap, About → Check for updates, or first discovery on open).
-    val updatePageVisible by container.updateManager.pageVisible.collectAsState()
 
     // Visited-tab history (most recent last, never contains the current tab).
     var tabHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
@@ -178,6 +175,8 @@ fun OneCRApp(container: AppContainer) {
     // later in the composition, so they intercept first when composed.
     BackHandler {
         when {
+            showAbout -> showAbout = false
+
             showNotificationCenter -> showNotificationCenter = false
 
             tabHistory.isNotEmpty() -> {
@@ -197,15 +196,6 @@ fun OneCRApp(container: AppContainer) {
                 }
             }
         }
-    }
-
-    // The v0.3.3 update page — a separate window, so it floats above the
-    // onboarding wizard and the shell alike ("above everything"). Its own
-    // BackHandler treats system back as Cancel (snooze + close).
-    if (updatePageVisible &&
-        container.updateManager.updateState.value is UpdateState.Available
-    ) {
-        UpdatePage(manager = container.updateManager)
     }
 
     if (showOnboarding) {
@@ -255,8 +245,7 @@ fun OneCRApp(container: AppContainer) {
             },
             allowSkip = onboardingIsRerun,
         )
-        return
-    }
+    } else {
 
     val badgeCount = notificationModel.badgeCount
 
@@ -302,6 +291,15 @@ fun OneCRApp(container: AppContainer) {
                     }
                 },
                 actions = {
+                    // v0.3.4: the About page — an ⓘ beside the bell, its own
+                    // standalone page like the notification center.
+                    IconButton(onClick = { showAbout = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Info,
+                            contentDescription = "About",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     // The bell: unread badge counts needs + errors + unseen activity.
                     IconButton(onClick = { showNotificationCenter = true }) {
                         BadgedBox(
@@ -382,8 +380,6 @@ fun OneCRApp(container: AppContainer) {
 
                 TopLevelTab.SETTINGS ->
                     SettingsScreen(
-                        appInfo = container.appInfo,
-                        logoRes = R.drawable.ic_brand_logo,
                         privilegeHealth = container.privilegeMonitor.health,
                         recentEvents = container.detection.recentEvents,
                         permissions = container.permissions,
@@ -408,11 +404,6 @@ fun OneCRApp(container: AppContainer) {
                             onboardingIsRerun = true
                             showOnboarding = true
                         },
-                        // v0.3.3 capture engine (M3 step 1) + update checker.
-                        autoRecordEnabled = container.autoRecordCalls.value,
-                        onAutoRecordChange = container::setAutoRecordCalls,
-                        onProbeCapture = { container.recordingEngine.probeNow() },
-                        onCheckForUpdates = { container.updateManager.checkNow(force = true) },
                         modifier = Modifier.padding(innerPadding),
                     )
             }
@@ -465,5 +456,81 @@ fun OneCRApp(container: AppContainer) {
             onBack = { showNotificationCenter = false },
             modifier = Modifier.fillMaxSize(),
         )
+    }
+
+    // The About page (v0.3.4) slides in from the right like the notification
+    // center — a standalone page behind the ⓘ next to the bell.
+    val motionAbout = LocalMotionEnabled.current
+    AnimatedVisibility(
+        visible = showAbout,
+        enter = if (motionAbout) {
+            slideInHorizontally(tween(MOTION_ENTER_MS)) { it } + fadeIn(tween(MOTION_ENTER_MS))
+        } else {
+            EnterTransition.None
+        },
+        exit = if (motionAbout) {
+            slideOutHorizontally(tween(MOTION_EXIT_MS)) { it } + fadeOut(tween(MOTION_EXIT_MS))
+        } else {
+            ExitTransition.None
+        },
+    ) {
+        AboutScreen(
+            appInfo = container.appInfo,
+            logoRes = R.drawable.ic_brand_logo,
+            onRerunOnboarding = {
+                showAbout = false
+                onboardingIsRerun = true
+                showOnboarding = true
+            },
+            onBack = { showAbout = false },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+    } // not-onboarding branch
+
+    // The update page (v0.3.3) renders above EVERYTHING — onboarding, tabs,
+    // the notification center, About. It is composed LAST on purpose:
+    // Compose draws later siblings on top, and an update outranks whatever
+    // screen is showing — including the wizard.
+    val updateInfo by container.updateCoordinator.available.collectAsState()
+    val updatePageVisible by container.updateCoordinator.pageVisible.collectAsState()
+    val updateDownload by container.updateCoordinator.download.collectAsState()
+    val motionUpdate = LocalMotionEnabled.current
+    updateInfo?.let { info ->
+        AnimatedVisibility(
+            visible = updatePageVisible,
+            enter = if (motionUpdate) {
+                slideInHorizontally(tween(MOTION_ENTER_MS)) { it } + fadeIn(tween(MOTION_ENTER_MS))
+            } else {
+                EnterTransition.None
+            },
+            exit = if (motionUpdate) {
+                slideOutHorizontally(tween(MOTION_EXIT_MS)) { it } + fadeOut(tween(MOTION_EXIT_MS))
+            } else {
+                ExitTransition.None
+            },
+        ) {
+            UpdateScreen(
+                info = info,
+                currentVersion = container.appInfo.versionName,
+                downloadState = updateDownload,
+                canInstallApks = container.updateCoordinator.canInstallApks(),
+                logoRes = R.drawable.ic_brand_logo,
+                onUpdate = { container.updateCoordinator.onUpdatePressed() },
+                onCancel = { container.updateCoordinator.dismissForSession() },
+                onRetry = { container.updateCoordinator.retryDownload() },
+                onOpenReleasePage = {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(info.releaseUrl),
+                            ),
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
