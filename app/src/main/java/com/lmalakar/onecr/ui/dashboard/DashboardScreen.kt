@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -56,12 +55,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,7 +69,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.lmalakar.onecr.AppContainer
-import kotlinx.coroutines.launch
 import com.lmalakar.onecr.R
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
 import com.lmalakar.onecr.core.designsystem.motion.LocalMotionEnabled
@@ -86,8 +78,6 @@ import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
 import com.lmalakar.onecr.service.detection.LiveCallState
-import com.lmalakar.onecr.service.recorder.RecordingEngine
-import com.lmalakar.onecr.service.recorder.RecordingJournal
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -147,35 +137,6 @@ fun DashboardScreen(
         }
     }
 
-    // v0.3.3: manual "Record now" — requests the microphone permission in
-    // context, then starts a capture session through the engine's fallback
-    // chain (VOICE_CALL when the device allows it, microphone otherwise).
-    val recorderScope = rememberCoroutineScope()
-    var recordAfterGrant by remember { mutableStateOf(false) }
-    val micLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted && recordAfterGrant) {
-            recorderScope.launch { runCatching { container.recordingEngine.start(RecordingJournal.TRIGGER_MANUAL) } }
-        }
-        recordAfterGrant = false
-    }
-
-    fun startManualRecording() {
-        val micGranted = androidx.core.content.ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.RECORD_AUDIO,
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (micGranted) {
-            recorderScope.launch {
-                runCatching { container.recordingEngine.start(RecordingJournal.TRIGGER_MANUAL) }
-            }
-        } else {
-            recordAfterGrant = true
-            micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
     // Same policy as the notification center: never nag about a bridge that was
     // never set up (it is optional until M3) — only about a configured or
     // degraded one.
@@ -201,13 +162,6 @@ fun DashboardScreen(
             onStart = { startDetection() },
             onStop = { stopDetection() },
             onRecheck = { container.privilegeMonitor.refreshAsync() },
-        )
-
-        // ---------------- Capture (M3 step 1, v0.3.3) ---------------------------
-        CaptureCard(
-            recorderState = container.recordingEngine.state.collectAsState().value,
-            onStartManual = { startManualRecording() },
-            onStopManual = { container.recordingEngine.stop() },
         )
 
         // ---------------- At a glance ------------------------------------------
@@ -313,8 +267,7 @@ fun DashboardScreen(
                         tint = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                     Text(
-                        text = "The 24×7 watcher can be paused when the app is closed. " +
-                            "Allow background running to keep it alive.",
+                        text = "Allow background running to keep the watcher alive.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                         modifier = Modifier.weight(1f),
@@ -347,7 +300,7 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "v${appInfo.versionName} (${appInfo.buildType}) — capture step 1 build. Nothing leaves this device.",
+            text = "Nothing leaves this device",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -450,7 +403,7 @@ private fun CommandCard(
                         Text(
                             text = when {
                                 running -> describeCallState(callState)
-                                else -> "Not watching for calls — start below."
+                                else -> "Not watching — start below"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -474,19 +427,19 @@ private fun CommandCard(
                         OutlinedButton(onClick = onStop, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.size(6.dp))
-                            Text("Stop detection")
+                            Text("Stop")
                         }
                     } else {
                         Button(onClick = onStart, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.size(6.dp))
-                            Text("Start detection")
+                            Text("Start")
                         }
                     }
                     OutlinedButton(onClick = onRecheck, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.size(6.dp))
-                        Text("Re-check bridge")
+                        Text("Re-check")
                     }
                 }
             }
@@ -654,7 +607,7 @@ private fun ActivityCard(
             }
             if (events.isEmpty()) {
                 Text(
-                    "Nothing yet — start detection, then make a call. Full log: Settings → Event log.",
+                    "No calls yet",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -805,7 +758,7 @@ private fun RoadmapCard() {
                 }
             }
             Text(
-                text = "Next up — M3: two-sided call capture through the shell bridge this dashboard already watches.",
+                text = "Next — M3: call audio capture",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -831,97 +784,9 @@ private fun describeCallState(state: LiveCallState): String = when (state) {
 private fun detectionCapabilityText(
     caps: com.lmalakar.onecr.service.detection.DetectionEngine.DetectionCapabilities,
 ): String = buildString {
-    append("Cellular detection ")
-    append(if (caps.cellular) "active" else "off (grant Phone permission)")
-    append("; VoIP detection ")
-    append(if (caps.anyVoip) "active" else "off (enable notification access)")
-    append(". VoIP capture arrives in the next M3 step.")
-}
-
-// ---------------------------------------------------------------------
-// Capture card (M3 step 1, v0.3.3)
-// ---------------------------------------------------------------------
-
-/**
- * Live capture status plus the universal "Record now" fallback. Auto capture
- * (cellular calls, when the Settings switch is on) drives the same engine —
- * auto sessions stop with the call; manual ones keep going until stopped.
- */
-@Composable
-private fun CaptureCard(
-    recorderState: RecordingEngine.UiState,
-    onStartManual: () -> Unit,
-    onStopManual: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Mic,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Capture",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = when (val state = recorderState) {
-                            is RecordingEngine.UiState.Idle ->
-                                "Idle — \"Record now\" captures through the fallback chain " +
-                                    "(call audio when the device allows it, microphone otherwise)."
-                            is RecordingEngine.UiState.Recording ->
-                                "Recording via ${state.source.name.lowercase().replace('_', ' ')} — " +
-                                    "file saved on this device only."
-                            is RecordingEngine.UiState.Finalizing -> "Saving the recording…"
-                            is RecordingEngine.UiState.Failed -> "Last attempt failed: ${state.message}"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (recorderState is RecordingEngine.UiState.Recording ||
-                    recorderState is RecordingEngine.UiState.Finalizing
-                ) {
-                    Button(
-                        onClick = onStopManual,
-                        enabled = recorderState is RecordingEngine.UiState.Recording,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text("Stop")
-                    }
-                } else {
-                    Button(onClick = onStartManual, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text("Record now")
-                    }
-                }
-            }
-
-            Text(
-                "Auto-record for detected cellular calls: Settings → Capture (M3).",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    append("Cellular ")
+    append(if (caps.cellular) "on" else "off")
+    append(" · VoIP ")
+    append(if (caps.anyVoip) "on" else "off")
+    append(" · recording in M3")
 }
