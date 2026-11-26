@@ -2,95 +2,92 @@ package com.lmalakar.onecr.privilege.embeddedadb
 
 import java.security.MessageDigest
 import javax.crypto.Cipher
+import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * The adb pairing cipher (packages/modules/adb pairing_cipher.cpp, reimplemented
- * on-device for the M2.5 embedded bridge):
+ * The pairing_auth cipher: AES-128-GCM keyed by HKDF-SHA256 over the SPAKE2
+ * keying material, nonce = little-endian uint64 sequence + 4 zero bytes,
+ * separate tx/rx sequence counters, no AAD, 16-byte tag appended.
  *
- *  - HKDF-SHA256 over the SPAKE2 shared secret (salt = empty,
- *    info = "adb-pairing-key") derives the AES-128-GCM key;
- *  - every encrypt/decrypt uses a 12-byte IV built from an 8-byte
- *    little-endian sequence counter (separate tx/rx sequences, both starting
- *    at 0 — mirrors the memcpy(&seq_) layout in AOSP) followed by zero bytes;
- *  - ciphertext format is `ct || 16-byte tag`, exactly what the phone's adbd
- *    produces and expects for the PeerInfo exchange.
+ * Mirrors adb/pairing_auth/aes_128_gcm.cpp exactly.
  */
 internal class PairingCipher(keyMaterial: ByteArray) {
 
-    private val key = ByteArray(AES_KEY_SIZE)
-    private var txSequence: Long = 0
-    private var rxSequence: Long = 0
+    private val key: ByteArray
+    private var encSequence: Long = 0
+    private var decSequence: Long = 0
 
     init {
-        val derived = hkdfSha256(keyMaterial, ByteArray(0), HKDF_INFO.toByteArray(Charsets.US_ASCII), AES_KEY_SIZE)
-        System.arraycopy(derived, 0, key, 0, AES_KEY_SIZE)
+        require(keyMaterial.isNotEmpty())
+        key = hkdfSha256(
+            ikm = keyMaterial,
+            salt = ByteArray(32), // BoringSSL HKDF with salt=NULL uses zero-filled salt
+            info = "adb pairing_auth aes-128-gcm key".toByteArray(Charsets.US_ASCII),
+            length = 16,
+        )
     }
 
-    /** Encrypts [plaintext]; the result is `ciphertext || tag` (tag = 16 bytes). */
+    /** Encrypts [plaintext]; returns ciphertext with the 16-byte GCM tag appended. */
     fun encrypt(plaintext: ByteArray): ByteArray {
+        val nonce = nonceFor(encSequence)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, nonce(txSequence++)))
-        return cipher.doFinal(plaintext)
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+        val out = cipher.doFinal(plaintext) // ciphertext || 16-byte tag
+        encSequence++
+        return out
     }
 
-    /** Decrypts `ct || tag`; throws [AEADBadTagException] on a wrong key/ corrupted data. */
+    /** Decrypts [ciphertext] (with 16-byte tag); throws AEADBadTagException on wrong key. */
     fun decrypt(ciphertext: ByteArray): ByteArray {
-        require(ciphertext.size > TAG_BYTES) { "ciphertext too short" }
+        val nonce = nonceFor(decSequence)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, nonce(rxSequence++)))
-        return cipher.doFinal(ciphertext)
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+        val out = cipher.doFinal(ciphertext)
+        decSequence++
+        return out
     }
 
-    private fun nonce(sequence: Long): ByteArray {
-        val iv = ByteArray(IV_SIZE)
-        for (i in 0 until 8) {
-            iv[i] = ((sequence ushr (8 * i)) and 0xFF).toByte() // little-endian counter
+    private fun nonceFor(sequence: Long): ByteArray {
+        val nonce = ByteArray(12)
+        var s = sequence
+        for (i in 0 until 8) { // little-endian uint64
+            nonce[i] = (s and 0xFF).toByte()
+            s = s ushr 8
         }
-        return iv
+        return nonce
     }
 
     companion object {
-
-        private const val AES_KEY_SIZE = 16
-        private const val IV_SIZE = 12
-        private const val TAG_BYTES = 16
-        private const val TAG_BITS = 128
-        private const val HKDF_INFO = "adb-pairing-key"
-
-        /**
-         * RFC 5869 HKDF (SHA-256): PRK = HMAC(salt, IKM), then T(i) =
-         * HMAC(PRK, T(i-1) | info | i). Cross-validated against the RFC test
-         * vectors in src/test/resources/testvectors.txt.
-         */
+        /** RFC 5869 HKDF with SHA-256. */
         fun hkdfSha256(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
-            require(length <= 255 * 32) { "HKDF output too long" }
-            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
-
+            val hmac = Mac.getInstance("HmacSHA256")
             // Extract
-            val prk = run {
-                mac.init(javax.crypto.spec.SecretKeySpec(if (salt.isEmpty()) ByteArray(32) else salt, "HmacSHA256"))
-                mac.doFinal(ikm)
-            }
-
+            hmac.init(SecretKeySpec(if (salt.isEmpty()) ByteArray(32) else salt, "HmacSHA256"))
+            val prk = hmac.doFinal(ikm)
             // Expand
-            val okm = ByteArray(length)
+            hmac.init(SecretKeySpec(prk, "HmacSHA256"))
+            val out = ByteArray(length)
             var t = ByteArray(0)
-            var offset = 0
+            var pos = 0
             var counter = 1
-            while (offset < length) {
-                mac.init(javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256"))
-                mac.update(t)
-                mac.update(info)
-                mac.update(counter.toByte())
-                t = mac.doFinal()
-                val n = minOf(t.size, length - offset)
-                System.arraycopy(t, 0, okm, offset, n)
-                offset += n
+            while (pos < length) {
+                hmac.reset()
+                hmac.init(SecretKeySpec(prk, "HmacSHA256"))
+                hmac.update(t)
+                hmac.update(info)
+                hmac.update(counter.toByte())
+                t = hmac.doFinal()
+                val toCopy = minOf(t.size, length - pos)
+                System.arraycopy(t, 0, out, pos, toCopy)
+                pos += toCopy
                 counter++
             }
-            return okm
+            return out
         }
+
+        fun sha256(data: ByteArray): ByteArray =
+            MessageDigest.getInstance("SHA-256").digest(data)
     }
 }
