@@ -11,6 +11,7 @@ import com.lmalakar.onecr.core.common.DispatchersProvider
 import com.lmalakar.onecr.core.common.Logger
 import com.lmalakar.onecr.core.common.SystemTimeProvider
 import com.lmalakar.onecr.core.model.AppInfo
+import com.lmalakar.onecr.core.model.CallDirection
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.AppSettingsStore
 import com.lmalakar.onecr.data.files.EventLogStore
@@ -25,8 +26,10 @@ import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
 import com.lmalakar.onecr.service.detection.CallerIdResolver
 import com.lmalakar.onecr.service.detection.DetectionEngine
 import com.lmalakar.onecr.service.detection.DetectionServiceHost
-import com.lmalakar.onecr.service.recorder.RecorderServiceHost
+import com.lmalakar.onecr.service.detection.LiveCallState
+import com.lmalakar.onecr.service.recorder.RecorderHost
 import com.lmalakar.onecr.service.recorder.RecordingEngine
+import com.lmalakar.onecr.update.UpdateManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -117,19 +120,31 @@ class AppContainer(appContext: Context) {
         eventLog = eventLog,
     )
 
-    // ---- Recorder (M3, v0.3.2) ----
-    // The provider lambda is live: switching the privilege mode mid-session is
-    // picked up by the next capture session without rebuilding the engine.
-    val recorder = RecordingEngine(
+    // ---- Capture (M3 step 1, v0.3.3) ----
+    /**
+     * The recording engine: probe-verified source fallback, PCM → WAV, crash
+     * journal + orphan sweep. Auto-captures detected cellular calls when the
+     * Settings switch is on; the Dashboard's "Record now" works always.
+     */
+    val recordingEngine = RecordingEngine(
         appContext = appContext,
         dispatchers = dispatchers,
         time = SystemTimeProvider(),
         logger = logger,
         eventLog = eventLog,
         provider = { privilegeProvider },
-        autoRecordEnabled = { settings.autoRecordEnabled },
+        autoRecordEnabled = { settings.autoRecordCalls },
         scope = appScope,
     )
+
+    /** Compose-observable mirror of [AppSettingsStore.autoRecordCalls]. */
+    val autoRecordCalls = mutableStateOf(settings.autoRecordCalls)
+
+    /** Persist the auto-record switch. */
+    fun setAutoRecordCalls(enabled: Boolean) {
+        settings.autoRecordCalls = enabled
+        autoRecordCalls.value = enabled
+    }
 
     // ---- Appearance (v0.2.1) ----
     /** Compose-observable mirror of [AppSettingsStore.themeMode]; SYSTEM by default. */
@@ -208,36 +223,53 @@ class AppContainer(appContext: Context) {
         notificationCenter.refresh()
     }
 
+    // ---- Update checker (v0.3.3) ----
+
+    /**
+     * GitHub release update checker: throttled check on open, notification
+     * with Update/Cancel actions, the above-everything update page, and the
+     * permission → download → SHA-256 → install flow.
+     */
+    val updateManager = UpdateManager(
+        appContext = appContext,
+        scope = appScope,
+        dispatchers = dispatchers,
+        settings = settings,
+        logger = logger,
+        currentVersionName = appInfo.versionName,
+    )
+
     init {
         DetectionServiceHost.engineProvider = { detection }
-        RecorderServiceHost.engineProvider = { recorder }
+        RecorderHost.engineProvider = { recordingEngine }
         privilegeMonitor.start()
-        // M3 auto capture: detected cellular call start/end drives the shell
-        // recorder (when the user left auto-record on). VoIP events route
-        // through the same hook — the engine records what the probe says the
-        // device can capture.
-        appScope.launch {
+
+        // Auto capture: forward the live call state to the recorder engine.
+        // The recorder module stays decoupled from :service:detection — the
+        // app owns the wiring (same inversion as DetectionServiceHost).
+        appScope.launch(dispatchers.default) {
             detection.callState.collect { state ->
                 when (state) {
-                    is com.lmalakar.onecr.service.detection.LiveCallState.CellularActive ->
-                        recorder.onCallStateChanged(
+                    is LiveCallState.CellularActive ->
+                        recordingEngine.onCallStateChanged(
                             callActive = true,
                             direction = state.direction,
                             phone = state.number,
                         )
 
-                    is com.lmalakar.onecr.service.detection.LiveCallState.VoipActive ->
-                        recorder.onCallStateChanged(
+                    is LiveCallState.VoipActive ->
+                        recordingEngine.onCallStateChanged(
                             callActive = true,
-                            direction = com.lmalakar.onecr.core.model.CallDirection.VOIP,
+                            direction = CallDirection.VOIP,
                             phone = null,
                         )
 
-                    else -> recorder.onCallStateChanged(
-                        callActive = false,
-                        direction = com.lmalakar.onecr.core.model.CallDirection.UNKNOWN,
-                        phone = null,
-                    )
+                    LiveCallState.Idle, is LiveCallState.CellularRinging ->
+                        recordingEngine.onCallStateChanged(
+                            callActive = false,
+                            direction = CallDirection.UNKNOWN,
+                            phone = null,
+                        )
                 }
             }
         }
