@@ -37,12 +37,23 @@ jobs:
       # cold dependency resolution (the Aliyun mirror was removed from CI in
       # v0.3.2, so there is no fallback). Gradle keeps every artifact already
       # downloaded in its local cache, so a retry continues where the previous
-      # attempt stopped. Only network errors are retried -- real test or
-      # compilation failures fail fast without wasting CI minutes.
+      # attempt stopped. Only dependency-resolution network errors are retried;
+      # real test or compilation failures fail fast with an extracted diagnosis.
       - name: Unit tests (network-tolerant retry)
         shell: bash
         run: |
           set -o pipefail
+          print_context() {
+            echo ""
+            echo "=================== FAILURE DIAGNOSIS (auto-extracted) ==================="
+            echo "--- Gradle 'What went wrong' ---"
+            awk '/^\* What went wrong:/{flag=1} flag{print; n++} n>25{exit}' gradle-unit-tests.log || true
+            echo "--- Tasks that FAILED ---"
+            grep -E "> Task .* FAILED" gradle-unit-tests.log | head -10 || true
+            echo "--- Failing tests ---"
+            grep -E "FAILED$" gradle-unit-tests.log | grep -vE "^> Task|^BUILD FAILED" | head -20 || true
+            echo "==========================================================================="
+          }
           max=5
           attempt=1
           while [ "$attempt" -le "$max" ]; do
@@ -51,17 +62,31 @@ jobs:
               echo "Unit tests passed on attempt $attempt."
               exit 0
             fi
-            if grep -qE "Received status code (429|5[0-9][0-9])|Could not (GET|HEAD)|Connection reset|Read timed out|SocketTimeout" gradle-unit-tests.log; then
+            if grep -qE "Received status code (429|5[0-9][0-9])" gradle-unit-tests.log && grep -q "Could not resolve" gradle-unit-tests.log; then
               echo "::warning::Transient network error while resolving dependencies (Maven Central 429 on GitHub runner IPs). Retrying in 90s..."
               sleep 90
               attempt=$((attempt + 1))
             else
-              echo "::error::Gradle failed for a non-network reason -- see the test/compile errors in the log above. Not retrying."
+              print_context
+              echo "::error::Gradle failed for a non-network reason -- see the diagnosis above and the 'test-diagnostics' artifact."
               exit 1
             fi
           done
+          print_context
           echo "::error::Still hitting Maven Central rate limits after $max attempts. Re-run the job later, or re-enable a Maven mirror in settings.gradle.kts."
           exit 1
+
+      - name: Upload test diagnostics (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics
+          path: |
+            gradle-unit-tests.log
+            **/build/reports/tests/**
+            **/build/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
