@@ -33,9 +33,35 @@ jobs:
         with:
           dependency-graph: disabled
 
-      # Tests first: fail fast before spending time on packaging.
-      - name: Unit tests
-        run: ./gradlew test --stacktrace
+      # Maven Central rate-limits GitHub runner IPs with HTTP 429, which kills
+      # cold dependency resolution (the Aliyun mirror was removed from CI in
+      # v0.3.2, so there is no fallback). Gradle keeps every artifact already
+      # downloaded in its local cache, so a retry continues where the previous
+      # attempt stopped. Only network errors are retried -- real test or
+      # compilation failures fail fast without wasting CI minutes.
+      - name: Unit tests (network-tolerant retry)
+        shell: bash
+        run: |
+          set -o pipefail
+          max=5
+          attempt=1
+          while [ "$attempt" -le "$max" ]; do
+            echo "Gradle attempt $attempt of $max: test"
+            if ./gradlew test --stacktrace 2>&1 | tee gradle-unit-tests.log; then
+              echo "Unit tests passed on attempt $attempt."
+              exit 0
+            fi
+            if grep -qE "Received status code (429|5[0-9][0-9])|Could not (GET|HEAD)|Connection reset|Read timed out|SocketTimeout" gradle-unit-tests.log; then
+              echo "::warning::Transient network error while resolving dependencies (Maven Central 429 on GitHub runner IPs). Retrying in 90s..."
+              sleep 90
+              attempt=$((attempt + 1))
+            else
+              echo "::error::Gradle failed for a non-network reason -- see the test/compile errors in the log above. Not retrying."
+              exit 1
+            fi
+          done
+          echo "::error::Still hitting Maven Central rate limits after $max attempts. Re-run the job later, or re-enable a Maven mirror in settings.gradle.kts."
+          exit 1
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
