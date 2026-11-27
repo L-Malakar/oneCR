@@ -105,8 +105,17 @@ internal class AdbClient(
                     consumeFrames(payload, stdout, stderr) {
                         exitCode = it
                     }
-                    // The adb protocol ACKs every WRTE with OKAY.
-                    writePacket(o, CMD_OKAY, localId, remoteId, EMPTY)
+                    // The adb protocol ACKs every WRTE with OKAY. The ACK is a
+                    // protocol courtesy, not a result: when the device closes
+                    // the session right after its last WRTE (adbd restarts, the
+                    // mock server's "drop", real races), the ACK write can hit
+                    // a dead socket. Failing the command -- or worse, retrying
+                    // it -- because a courtesy ACK bounced would re-execute a
+                    // shell command whose output is already complete. So the
+                    // ACK is best-effort: if it fails, the next read on the
+                    // dead socket raises the real error (or the loop simply
+                    // ends because the exit frame was already received).
+                    runCatching { writePacket(o, CMD_OKAY, localId, remoteId, EMPTY) }
                 }
                 CMD_CLSE -> {
                     if (arg1 == localId) closed = true
