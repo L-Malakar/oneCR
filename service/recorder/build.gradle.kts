@@ -32,4 +32,10 @@ tasks.withType<KotlinCompile>().configureEach {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:common"))
+    implementation(project(":data:files"))
+    implementation(project(":privilege:api"))
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.core)
+    testImplementation(libs.junit)
 }
