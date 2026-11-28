@@ -155,6 +155,9 @@ fun OneCRApp(container: AppContainer) {
     val updateInfo by container.updateCoordinator.available.collectAsState()
     val updateManualCheck by container.updateCoordinator.manualCheck.collectAsState()
 
+    // v0.3.7: the VoIP arm state drives the Settings capture card.
+    val voipArmed by container.recorder.voipArmed.collectAsState()
+
     // Visited-tab history (most recent last, never contains the current tab).
     var tabHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var selectedTabName by rememberSaveable { mutableStateOf(TopLevelTab.DASHBOARD.name) }
@@ -411,6 +414,11 @@ fun OneCRApp(container: AppContainer) {
                         autoRecordEnabled = container.settings.autoRecordEnabled,
                         onAutoRecordChange = { container.settings.autoRecordEnabled = it },
                         onRunCaptureProbe = { container.recorder.probeNow() },
+                        voipCaptureEnabled = container.settings.voipCaptureEnabled,
+                        onVoipCaptureChange = { container.settings.voipCaptureEnabled = it },
+                        voipArmed = voipArmed,
+                        onArmVoip = { resultCode, data -> container.recorder.armVoip(resultCode, data) },
+                        onDisarmVoip = container.recorder::disarmVoip,
                         onClearEventLog = container.detection::clearLog,
                         onRerunOnboarding = {
                             onboardingIsRerun = true
