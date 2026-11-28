@@ -12,14 +12,21 @@ pluginManagement {
             }
         }
         // Aliyun mirrors Maven Central and is consulted first for third-party
-        // artifacts: repo.maven.apache.org rate-limits some IPs (HTTP 429),
-        // which aborts first-time builds of this project. Maven Central stays
-        // in the list as the canonical fallback (v0.2.4).
+        // artifacts on LOCAL builds: repo.maven.apache.org rate-limits some
+        // IPs (HTTP 429), which aborts first-time builds of this project.
+        // Maven Central stays in the list as the canonical fallback (v0.2.4).
         //
-        // v0.3.2: the mirror is SKIPPED on GitHub Actions — runners live close
-        // to Maven Central anyway, and a slow or flaky mirror hop was the one
-        // repository difference between green local builds and red CI builds.
-        if (System.getenv("CI") == null) {
+        // v0.3.6 — CI repository policy, reversing the v0.3.2 decision:
+        // repo.maven.apache.org aggressively rate-limits GitHub Actions
+        // runner IPs with HTTP 429, which kills every cold CI build no
+        // matter how often Gradle retries (v0.3.5's retry loop proved it).
+        // On CI, Central-hosted artifacts therefore resolve from Google's
+        // full Maven Central mirror — a global CDN that does not rate-limit
+        // — with mavenCentral kept last as the canonical fallback for the
+        // rare artifact the mirror has not ingested yet.
+        if (System.getenv("CI") == "true") {
+            maven("https://maven-central.storage-download.googleapis.com/maven2")
+        } else {
             maven("https://maven.aliyun.com/repository/public")
         }
         mavenCentral()
@@ -31,7 +38,11 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
-        if (System.getenv("CI") == null) {
+        // Same CI policy as pluginManagement above (v0.3.6): Google's
+        // Central mirror on GitHub Actions, Aliyun locally, Central last.
+        if (System.getenv("CI") == "true") {
+            maven("https://maven-central.storage-download.googleapis.com/maven2")
+        } else {
             maven("https://maven.aliyun.com/repository/public")
         }
         mavenCentral()
