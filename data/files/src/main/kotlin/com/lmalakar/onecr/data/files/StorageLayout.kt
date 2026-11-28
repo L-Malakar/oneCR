@@ -26,6 +26,7 @@ object StorageLayout {
     const val FINAL_SUBDIR = "final"
     const val JOURNAL_FILE = "journal.json"
 
+    const val CALL_STREAM = "call.wav"
     const val DOWNLINK_STREAM = "downlink.wav"
     const val UPLINK_STREAM = "uplink.wav"
     const val MIC_STREAM = "mic.wav"
