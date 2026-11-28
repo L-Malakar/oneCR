@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -53,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
 import com.lmalakar.onecr.AppContainer
 import com.lmalakar.onecr.R
 import com.lmalakar.onecr.core.designsystem.component.SectionHeader
@@ -76,6 +79,8 @@ import com.lmalakar.onecr.data.files.EventLogEntry
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.service.detection.CallDetectionService
 import com.lmalakar.onecr.service.detection.DetectionContract
+import com.lmalakar.onecr.service.recorder.RecorderContract
+import com.lmalakar.onecr.service.recorder.RecordingEngine
 import com.lmalakar.onecr.service.detection.LiveCallState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -115,6 +120,8 @@ fun DashboardScreen(
     val capabilities by container.detection.capabilities.collectAsState()
     val recentEvents by container.detection.recentEvents.collectAsState()
     val running by container.detection.running.collectAsState()
+    val recorderState by container.recorder.state.collectAsState()
+    val recordScope = rememberCoroutineScope()
     val permissionSnapshot by container.permissions.collectAsState()
 
     fun startDetection() {
@@ -161,6 +168,13 @@ fun DashboardScreen(
             onStart = { startDetection() },
             onStop = { stopDetection() },
             onRecheck = { container.privilegeMonitor.refreshAsync() },
+            recorderState = recorderState,
+            onRecordNow = {
+                recordScope.launch {
+                    container.recorder.start(RecorderContract.TRIGGER_MANUAL)
+                }
+            },
+            onStopRecording = { container.recorder.stop() },
         )
 
         // ---------------- At a glance ------------------------------------------
@@ -204,7 +218,7 @@ fun DashboardScreen(
                 supporting = if (health.state == PrivilegeState.OK) {
                     "${health.mode.name.lowercase().replaceFirstChar { it.uppercase() }} connected"
                 } else {
-                    "used from M3"
+                    "needed for recording"
                 },
                 accent = health.state == PrivilegeState.OK,
                 modifier = Modifier.weight(1f),
@@ -323,6 +337,9 @@ private fun CommandCard(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onRecheck: () -> Unit,
+    recorderState: RecordingEngine.UiState,
+    onRecordNow: () -> Unit,
+    onStopRecording: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -439,6 +456,35 @@ private fun CommandCard(
                         Text("Re-check")
                     }
                 }
+
+                // ---- Recording controls (M3, v0.3.6) ----
+                val recordingNow = recorderState is RecordingEngine.UiState.Recording
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (recordingNow) {
+                        OutlinedButton(onClick = onStopRecording, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text("Stop recording")
+                        }
+                    } else {
+                        Button(onClick = onRecordNow, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text("Record now")
+                        }
+                    }
+                }
+                Text(
+                    text = when (val rs = recorderState) {
+                        is RecordingEngine.UiState.Recording ->
+                            "Recording via ${rs.source.name.lowercase().replace('_', ' ')}"
+                        is RecordingEngine.UiState.Finalizing -> "Saving the recording…"
+                        is RecordingEngine.UiState.Failed -> "Recorder: ${rs.message}"
+                        RecordingEngine.UiState.Idle -> "Records as shell (privileged telephony mix)"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -795,5 +841,5 @@ private fun detectionCapabilityText(
     append(if (caps.cellular) "on" else "off")
     append(" · VoIP ")
     append(if (caps.anyVoip) "on" else "off")
-    append(" · recording in M3")
+    append(" · recording via shell")
 }
