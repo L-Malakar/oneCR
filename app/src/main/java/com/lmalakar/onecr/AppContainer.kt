@@ -145,6 +145,7 @@ class AppContainer(appContext: Context) {
         journal = recordingJournal,
         provider = { privilegeProvider },
         autoRecordEnabled = { settings.autoRecordEnabled },
+        voipCaptureEnabled = { settings.voipCaptureEnabled },
         scope = appScope,
     )
 
