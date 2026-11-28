@@ -13,6 +13,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!--
+        v0.3.7 (VoIP dual-path capture): RECORD_AUDIO powers the app's own mic
+        path (optional — the feature degrades to playback-only without it), and
+        the microphone/mediaProjection foreground-service types are declared
+        with it. The mediaProjection consent dialog is shown by the system per
+        armed session; nothing runs without it.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- v0.2.6: restart the 24×7 call watcher after a reboot (only when the
          user opted in during onboarding). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -128,17 +139,19 @@
 
         <!--
             Recording foreground service (M3, v0.3.6): shows the live "Recording"
-            notification with a Stop action while the shell capture session runs.
-            specialUse again — the app process itself never opens the mic (the
-            privileged capture process does), so the microphone FGS type and its
-            Android 14 while-in-use restrictions do not apply here; the type
-            becomes microphone/mediaProjection with the in-app VoIP mix (next
-            M3 step).
+            notification with a Stop action while a capture session runs.
+
+            v0.3.7: the service now carries all three types it may run under —
+            specialUse for shell sessions (the app process never opens the mic,
+            the privileged capture process does), and microphone|mediaProjection
+            for an armed VoIP session (the Android 14 requirement: the typed
+            foreground service must run before MediaProjection is claimed).
+            startForeground picks the type per session kind at runtime.
         -->
         <service
             android:name="com.lmalakar.onecr.service.recorder.RecordingService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse|microphone|mediaProjection">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="shell_capture_call_recording_notification" />
