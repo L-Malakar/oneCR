@@ -57,6 +57,17 @@ class AppSettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_RECORD, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_RECORD, value).apply()
 
+    /**
+     * M3 (v0.3.7): auto-record internet calls (WhatsApp, Telegram, …) through
+     * the in-app MediaProjection + microphone mix. Gated twice: the persisted
+     * switch here, AND the armed MediaProjection session — Android requires
+     * fresh consent per app session, so arming in Settings is the real opt-in
+     * the user repeats whenever they want VoIP capture live.
+     */
+    var voipCaptureEnabled: Boolean
+        get() = prefs.getBoolean(KEY_VOIP_CAPTURE, true)
+        set(value) = prefs.edit().putBoolean(KEY_VOIP_CAPTURE, value).apply()
+
     private companion object {
         const val KEY_ONBOARDING_DONE = "onboarding_completed"
         const val KEY_PRIVILEGE_MODE = "privilege_mode"
@@ -65,6 +76,7 @@ class AppSettingsStore(context: Context) {
         const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
         const val KEY_NOTIFICATION_LAST_SEEN = "notification_last_seen"
         const val KEY_AUTO_RECORD = "auto_record_enabled"
+        const val KEY_VOIP_CAPTURE = "voip_capture_enabled"
     }
 }
 
