@@ -7,6 +7,14 @@ package com.lmalakar.onecr.service.recorder
 object RecorderContract {
     const val ACTION_START_RECORDING = "com.lmalakar.onecr.action.START_RECORDING"
     const val ACTION_STOP_RECORDING = "com.lmalakar.onecr.action.STOP_RECORDING"
+
+    /**
+     * v0.3.7: bring the service to the foreground with the mediaProjection
+     * (+ microphone) type so the engine can claim the consented projection —
+     * Android 14+ requires the typed foreground service first.
+     */
+    const val ACTION_ARM_VOIP = "com.lmalakar.onecr.action.ARM_VOIP"
+
     const val EXTRA_RECORDING_ID = "com.lmalakar.onecr.extra.RECORDING_ID"
 
     const val NOTIFICATION_CHANNEL_RECORDING = "recording"
