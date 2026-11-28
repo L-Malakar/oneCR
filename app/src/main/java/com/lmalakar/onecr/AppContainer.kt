@@ -27,6 +27,9 @@ import com.lmalakar.onecr.privilege.shizuku.ShizukuPrivilegeProvider
 import com.lmalakar.onecr.service.detection.CallerIdResolver
 import com.lmalakar.onecr.service.detection.DetectionEngine
 import com.lmalakar.onecr.service.detection.DetectionServiceHost
+import com.lmalakar.onecr.service.detection.LiveCallState
+import com.lmalakar.onecr.service.recorder.RecorderServiceHost
+import com.lmalakar.onecr.service.recorder.RecordingEngine
 import com.lmalakar.onecr.update.UpdateCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -130,6 +133,21 @@ class AppContainer(appContext: Context) {
      */
     val recordingJournal = RecordingJournal(File(appContext.filesDir, "recordings"))
 
+    // ---- Recorder (M3, v0.3.6) ----
+    // The provider lambda is live: switching the privilege mode mid-session is
+    // picked up by the next capture session without rebuilding the engine.
+    val recorder = RecordingEngine(
+        appContext = appContext,
+        dispatchers = dispatchers,
+        time = SystemTimeProvider(),
+        logger = logger,
+        eventLog = eventLog,
+        journal = recordingJournal,
+        provider = { privilegeProvider },
+        autoRecordEnabled = { settings.autoRecordEnabled },
+        scope = appScope,
+    )
+
     // ---- In-app updater (v0.3.3) ----
 
     /**
@@ -222,6 +240,7 @@ class AppContainer(appContext: Context) {
 
     init {
         DetectionServiceHost.engineProvider = { detection }
+        RecorderServiceHost.engineProvider = { recorder }
         privilegeMonitor.start()
         // Recorder groundwork (v0.3.4): one orphan sweep per app start marks
         // crashed takes so M3's engine (and later the Library) never mistakes
@@ -236,6 +255,36 @@ class AppContainer(appContext: Context) {
                             kind = EventLogEntry.KIND_SERVICE,
                             message = "Sweep marked ${report.orphanedCount} orphaned recording(s)",
                         ),
+                    )
+                }
+            }
+        }
+        // M3 auto capture (v0.3.6): detected call start/end drives the shell
+        // recorder (when the user left auto-record on). VoIP events route
+        // through the same hook — the engine records what the probe says the
+        // device can capture; VoIP auto-capture itself waits for the
+        // MediaProjection mix (next M3 step).
+        appScope.launch {
+            detection.callState.collect { state ->
+                when (state) {
+                    is LiveCallState.CellularActive ->
+                        recorder.onCallStateChanged(
+                            callActive = true,
+                            direction = state.direction,
+                            phone = state.number,
+                        )
+
+                    is LiveCallState.VoipActive ->
+                        recorder.onCallStateChanged(
+                            callActive = true,
+                            direction = com.lmalakar.onecr.core.model.CallDirection.VOIP,
+                            phone = null,
+                        )
+
+                    else -> recorder.onCallStateChanged(
+                        callActive = false,
+                        direction = com.lmalakar.onecr.core.model.CallDirection.UNKNOWN,
+                        phone = null,
                     )
                 }
             }
