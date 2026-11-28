@@ -49,13 +49,13 @@ Status legend: [ ] planned, [~] in progress, [x] done.
 - [x] v0.3.4: in-app updater (GitHub `releases/latest` check → update page above everything → Cancel/Update notification actions → APK download → automatic installer hand-off); About promoted to a standalone page behind the ⓘ top-bar icon; minimal-copy UI restyle; CI hardened (mirror gated off on runners, wrapper validation, job timeouts)
 
 ## M3 — Audio capture engine
-- [ ] Shell capture dex (`probe`/`start`/`stop`, PCM over pipe FD)
-- [ ] Capability probe + source fallback chain (VOICE_CALL → downlink+uplink dual → mic)
-- [ ] VoIP dual-path capture (MediaProjection playback capture + mic) + mixer
-- [~] WAV writer, recording journal, orphan sweep — **foundations landed in v0.3.4** (`WavWriter` + `RecordingJournal`, 12 unit tests); wiring into the capture engine remains
-- [ ] Foreground service (microphone + mediaProjection types) with notification controls
-- [ ] Capture diagnostics screen (working sources, sample rates, live levels)
-- Exit criteria: clean two-sided recordings for cellular and at least one VoIP app; 30-min soak test with flat memory and no ANRs.
+- [x] Shell capture dex (`probe`/`start`/`stop`, PCM over pipe FD) — **landed in v0.3.6** (`CaptureMain` spawned via `app_process` as UID 2000; dedicated `shell,v2:` TLS session on embedded ADB, binder pipes on Shizuku)
+- [x] Capability probe + source fallback chain (VOICE_CALL → downlink+uplink dual → mic) — **landed in v0.3.6** (probe walks source × rate, detects the silence quirk, picks the chain; Settings card + journal integration)
+- [ ] VoIP dual-path capture (MediaProjection playback capture + mic) + mixer — next M3 step
+- [x] WAV writer, recording journal, orphan sweep — foundations landed in v0.3.4 (`WavWriter` + `RecordingJournal`, 14 unit tests); **wired into the capture engine in v0.3.6**
+- [~] Foreground service (microphone + mediaProjection types) with notification controls — specialUse notification service with timer + Stop shipped in v0.3.6; the microphone/mediaProjection types join with the in-app VoIP mix
+- [~] Capture diagnostics screen (working sources, sample rates, live levels) — the Settings Capture card shows the probe chain + rates since v0.3.6; live levels still to come
+- Exit criteria: clean two-sided recordings for cellular and at least one VoIP app; 30-min soak test with flat memory and no ANRs (owner device testing)
 
 ## M4 — Library, storage, search, export
 - [ ] Room schema (recordings, transcripts, summaries, tags, FTS) + repositories
