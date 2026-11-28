@@ -104,6 +104,102 @@ class UpdateCheckerTest {
         val checker = UpdateChecker(fetch = { "502 Bad Gateway" })
         assertTrue(checker.check("0.3.3") is UpdateCheck.Failed)
     }
+
+    // ---- v0.3.7: the web fallback (the "Couldn't reach GitHub" fix) ----
+
+    /** The release page as GitHub serves it: the tag is in every anchor. */
+    private val releasePageHtml = """
+        <!doctype html><html><head>
+        <link rel="canonical" href="https://github.com/L-Malakar/oneCR/releases/tag/v0.3.7">
+        <meta property="og:url" content="https://github.com/L-Malakar/oneCR/releases/tag/v0.3.7">
+        </head><body><a href="/L-Malakar/oneCR/releases/tag/v0.3.7">oneCR v0.3.7</a></body></html>
+    """.trimIndent()
+
+    /** The expanded-assets fragment: the APK asset href (site-relative). */
+    private val assetsHtml = """
+        <div id="assets">
+        <a href="/L-Malakar/oneCR/releases/download/v0.3.7/SHA256SUMS-v0.3.7.txt">SHA256SUMS</a>
+        <a href="/L-Malakar/oneCR/releases/download/v0.3.7/oneCR-v0.3.7.apk">oneCR-v0.3.7.apk</a>
+        </div>
+    """.trimIndent()
+
+    @Test
+    fun `parses the tag out of the release page`() {
+        assertEquals("v0.3.7", GithubReleases.parseTagFromHtml(releasePageHtml))
+        assertNull(GithubReleases.parseTagFromHtml("<html>no tags here</html>"))
+        assertNull(GithubReleases.parseTagFromHtml(""))
+    }
+
+    @Test
+    fun `parses the apk href out of the assets fragment`() {
+        assertEquals(
+            "https://github.com/L-Malakar/oneCR/releases/download/v0.3.7/oneCR-v0.3.7.apk",
+            GithubReleases.parseApkUrlFromAssetsHtml(assetsHtml),
+        )
+        assertNull(GithubReleases.parseApkUrlFromAssetsHtml("<div>no assets</div>"))
+    }
+
+    @Test
+    fun `api failure falls back to the releases web page`() = kotlinx.coroutines.runBlocking {
+        // Carrier-grade NAT reality: api.github.com is rate-limited (null),
+        // github.com pages are not. The web path must still find the update.
+        val checker = UpdateChecker(fetch = { url ->
+            when {
+                url == GithubReleases.LATEST_URL -> null // API rate-limited
+                url == GithubReleases.WEB_LATEST_URL -> releasePageHtml
+                url.contains("expanded_assets") -> assetsHtml
+                else -> null
+            }
+        })
+        val result = checker.check("0.3.6")
+        assertTrue(result is UpdateCheck.Available)
+        val info = (result as UpdateCheck.Available).info
+        assertEquals("0.3.7", info.versionName)
+        assertEquals(
+            "https://github.com/L-Malakar/oneCR/releases/download/v0.3.7/oneCR-v0.3.7.apk",
+            info.apkUrl,
+        )
+        assertEquals("https://github.com/L-Malakar/oneCR/releases/tag/v0.3.7", info.releaseUrl)
+    }
+
+    @Test
+    fun `web fallback works without the assets fragment via the canonical name`() =
+        kotlinx.coroutines.runBlocking {
+            val checker = UpdateChecker(fetch = { url ->
+                when {
+                    url == GithubReleases.LATEST_URL -> "502 Bad Gateway"
+                    url == GithubReleases.WEB_LATEST_URL -> releasePageHtml
+                    else -> null // expanded_assets failed
+                }
+            })
+            val result = checker.check("0.3.6")
+            assertTrue(result is UpdateCheck.Available)
+            val info = (result as UpdateCheck.Available).info
+            // The canonical asset name is derived from the tag — this project
+            // has always published oneCR-v<version>.apk.
+            assertEquals(
+                "https://github.com/L-Malakar/oneCR/releases/download/v0.3.7/oneCR-v0.3.7.apk",
+                info.apkUrl,
+            )
+        }
+
+    @Test
+    fun `web fallback respects an up-to-date device`() = kotlinx.coroutines.runBlocking {
+        val checker = UpdateChecker(fetch = { url ->
+            when {
+                url == GithubReleases.LATEST_URL -> null
+                url == GithubReleases.WEB_LATEST_URL -> releasePageHtml
+                else -> assetsHtml
+            }
+        })
+        assertTrue(checker.check("0.3.7") is UpdateCheck.UpToDate)
+    }
+
+    @Test
+    fun `everything unreachable is still Failed, never an update`() = kotlinx.coroutines.runBlocking {
+        val checker = UpdateChecker(fetch = { null })
+        assertTrue(checker.check("0.3.6") is UpdateCheck.Failed)
+    }
 }
 
 class MiniJsonTest {
