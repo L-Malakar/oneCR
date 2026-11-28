@@ -1,8 +1,8 @@
 package com.lmalakar.onecr.service.recorder
 
 /**
- * Groundwork for M3. Stable string contracts for the recording foreground service so
- * detection, UI and tests can reference them without coupling to the class itself.
+ * Stable string contracts for the recording foreground service so detection,
+ * UI and tests can reference them without coupling to the class itself.
  */
 object RecorderContract {
     const val ACTION_START_RECORDING = "com.lmalakar.onecr.action.START_RECORDING"
@@ -11,6 +11,18 @@ object RecorderContract {
 
     const val NOTIFICATION_CHANNEL_RECORDING = "recording"
     const val NOTIFICATION_ID_RECORDING = 41
+
+    /** What started the session (journal + event log). */
+    const val TRIGGER_AUTO = "auto"
+    const val TRIGGER_MANUAL = "manual"
+}
+
+/**
+ * Bridge the service uses to reach the app's single [RecordingEngine]
+ * (same inversion as DetectionServiceHost — :app injects it at process start).
+ */
+object RecorderServiceHost {
+    var engineProvider: (() -> RecordingEngine)? = null
 }
 
 /** Parameters chosen for a recording session (defaults match the whisper pipeline input). */
