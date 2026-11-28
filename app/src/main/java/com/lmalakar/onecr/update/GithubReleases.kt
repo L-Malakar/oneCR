@@ -32,6 +32,67 @@ object GithubReleases {
     /** Header GitHub asks for on the REST API. */
     const val ACCEPT_HEADER = "application/vnd.github+json"
 
+    const val REPO = "L-Malakar/oneCR"
+
+    /**
+     * v0.3.7 fallback: the releases PAGE instead of the REST API. The
+     * unauthenticated api.github.com quota is 60 requests/hour per IP —
+     * exhausted within minutes on carrier-grade NAT (thousands of phones
+     * behind one address), and some networks throttle or block api.github.com
+     * outright. The page is CDN-fronted and rate-limit-free.
+     */
+    const val WEB_LATEST_URL = "https://github.com/$REPO/releases/latest"
+
+    fun expandedAssetsUrl(tag: String): String =
+        "https://github.com/$REPO/releases/expanded_assets/$tag"
+
+    /** First "…/releases/tag/&lt;tag&gt;" occurrence in a release page. */
+    private val TAG_IN_PAGE = Regex("""releases/tag/(v?\d[\w.+-]*)""")
+
+    /** First APK download href in an expanded-assets fragment. */
+    private val APK_HREF = Regex("""href="([^"]*releases/download/[^"]+\.apk)"""")
+
+    /**
+     * Extracts the release tag from the `releases/latest` page HTML (it shows
+     * up in the canonical link, og:url and every in-page anchor).
+     */
+    fun parseTagFromHtml(html: String): String? =
+        TAG_IN_PAGE.find(html)?.groupValues?.get(1)
+
+    /**
+     * Extracts the APK download URL from the expanded-assets fragment
+     * (hrefs are site-relative — "/owner/repo/releases/download/…" — so an
+     * absolute URL is built when needed).
+     */
+    fun parseApkUrlFromAssetsHtml(html: String): String? =
+        APK_HREF.find(html)?.groupValues?.get(1)?.let { href ->
+            if (href.startsWith("http")) href else "https://github.com$href"
+        }
+
+    /**
+     * Resolves the latest release through the web page — the fallback path for
+     * when the REST API is rate-limited or unreachable (v0.3.7). The release
+     * page yields the tag; the expanded-assets fragment yields the APK asset;
+     * when even that fails, the canonical asset name this project has always
+     * published (`oneCR-v&lt;version&gt;.apk`) is derived from the tag. Notes and
+     * date are not available on this path — they stay empty, never fabricated.
+     */
+    suspend fun latestViaWeb(fetch: suspend (url: String) -> String?): UpdateInfo? {
+        val page = fetch(WEB_LATEST_URL) ?: return null
+        val tag = parseTagFromHtml(page) ?: return null
+        val version = tag.trim().removePrefix("v").removePrefix("V")
+        val apkUrl = fetch(expandedAssetsUrl(tag))
+            ?.let { parseApkUrlFromAssetsHtml(it) }
+            ?: "https://github.com/$REPO/releases/download/$tag/oneCR-v$version.apk"
+        return UpdateInfo(
+            versionName = version,
+            releaseNotes = "",
+            apkUrl = apkUrl,
+            releaseUrl = "https://github.com/$REPO/releases/tag/$tag",
+            publishedAt = "",
+        )
+    }
+
     /**
      * Extracts [UpdateInfo] from a `releases/latest` JSON body.
      * Returns null when any required field is missing or no `.apk` asset
