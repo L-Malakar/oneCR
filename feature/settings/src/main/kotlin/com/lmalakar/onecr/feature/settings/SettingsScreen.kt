@@ -41,7 +41,9 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -82,10 +84,12 @@ import com.lmalakar.onecr.core.designsystem.motion.MOTION_EXIT_MS
 import com.lmalakar.onecr.core.model.PermissionSnapshot
 import com.lmalakar.onecr.core.model.ThemeMode
 import com.lmalakar.onecr.data.files.EventLogEntry
+import com.lmalakar.onecr.privilege.api.CaptureCapability
 import com.lmalakar.onecr.privilege.api.PrivilegeAction
 import com.lmalakar.onecr.privilege.api.PrivilegeHealth
 import com.lmalakar.onecr.privilege.api.PrivilegeState
 import com.lmalakar.onecr.privilege.api.ShellCommandResult
+import com.lmalakar.onecr.service.recorder.RecordingEngine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -136,6 +140,10 @@ fun SettingsScreen(
     onVerifyBridge: suspend () -> ShellCommandResult,
     selectedPrivilegeMode: String,
     onSelectPrivilegeMode: (String) -> Unit,
+    recorderState: StateFlow<RecordingEngine.UiState>,
+    autoRecordEnabled: Boolean,
+    onAutoRecordChange: (Boolean) -> Unit,
+    onRunCaptureProbe: suspend () -> CaptureCapability,
     onClearEventLog: () -> Unit,
     onRerunOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
@@ -190,6 +198,10 @@ fun SettingsScreen(
                 onVerifyBridge = onVerifyBridge,
                 selectedPrivilegeMode = selectedPrivilegeMode,
                 onSelectPrivilegeMode = onSelectPrivilegeMode,
+                recorderState = recorderState,
+                autoRecordEnabled = autoRecordEnabled,
+                onAutoRecordChange = onAutoRecordChange,
+                onRunCaptureProbe = onRunCaptureProbe,
                 onRerunOnboarding = onRerunOnboarding,
                 onOpenPermissions = { page = SettingsPage.PERMISSIONS },
                 onOpenEventLog = { page = SettingsPage.EVENT_LOG },
@@ -233,6 +245,10 @@ private fun RootSettings(
     onVerifyBridge: suspend () -> ShellCommandResult,
     selectedPrivilegeMode: String,
     onSelectPrivilegeMode: (String) -> Unit,
+    recorderState: StateFlow<RecordingEngine.UiState>,
+    autoRecordEnabled: Boolean,
+    onAutoRecordChange: (Boolean) -> Unit,
+    onRunCaptureProbe: suspend () -> CaptureCapability,
     onRerunOnboarding: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenEventLog: () -> Unit,
@@ -241,6 +257,7 @@ private fun RootSettings(
 ) {
     val health by privilegeHealth.collectAsState()
     val events by recentEvents.collectAsState()
+    val recorderUiState by recorderState.collectAsState()
     val permissionSnapshot by permissions.collectAsState()
     val verifyScope = rememberCoroutineScope()
     var verifyResult by remember { mutableStateOf<ShellCommandResult?>(null) }
@@ -431,6 +448,15 @@ private fun RootSettings(
             }
         }
 
+        // Capture (M3, v0.3.6): the shell recorder lives here
+        SectionHeader("Capture")
+        CaptureCard(
+            recorderState = recorderUiState,
+            autoRecordEnabled = autoRecordEnabled,
+            onAutoRecordChange = onAutoRecordChange,
+            onRunProbe = onRunCaptureProbe,
+        )
+
         SectionHeader("Keep alive")
         BatteryCard()
 
@@ -480,6 +506,144 @@ private fun RootSettings(
  * itself is closed. The state is re-read on every recomposition, so coming
  * back from the system dialog updates the card instantly.
  */
+/**
+ * The capture diagnostics card (M3, v0.3.6): the auto-record switch, the live
+ * recorder state and the audio-source probe — which privileged sources really
+ * return audio on this device, i.e. the fallback chain the recorder follows.
+ */
+@Composable
+private fun CaptureCard(
+    recorderState: RecordingEngine.UiState,
+    autoRecordEnabled: Boolean,
+    onAutoRecordChange: (Boolean) -> Unit,
+    onRunProbe: suspend () -> CaptureCapability,
+) {
+    val probeScope = rememberCoroutineScope()
+    var probeResult by remember { mutableStateOf<CaptureCapability?>(null) }
+    var probing by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                val recording = recorderState is RecordingEngine.UiState.Recording
+                IconTile(
+                    if (recording) Icons.Filled.CheckCircle else Icons.Filled.Mic,
+                    containerColor = if (recording) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    iconColor = if (recording) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Call capture",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = when (val rs = recorderState) {
+                            is RecordingEngine.UiState.Recording ->
+                                "Recording now — ${rs.source.name.lowercase().replace('_', ' ')}"
+
+                            is RecordingEngine.UiState.Finalizing -> "Saving the file…"
+                            is RecordingEngine.UiState.Failed -> "Last attempt failed: ${rs.message}"
+                            RecordingEngine.UiState.Idle -> "Idle — ready to record"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Auto-record: start the shell recorder when a cellular call connects.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PhoneInTalk,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Auto-record calls",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Start recording automatically when a call connects. " +
+                            "The Dashboard's Record-now button works regardless.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = autoRecordEnabled, onCheckedChange = onAutoRecordChange)
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            Text(
+                "Audio probe — opens the privileged capture sources for a moment " +
+                    "and reports which ones really return audio on this device.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            val result = probeResult
+            if (result == null) {
+                OutlinedButton(
+                    onClick = {
+                        probing = true
+                        probeScope.launch {
+                            probeResult = runCatching { onRunProbe() }.getOrNull()
+                            probing = false
+                        }
+                    },
+                    enabled = !probing,
+                ) {
+                    Text(if (probing) "Probing sources…" else "Run audio probe")
+                }
+            } else {
+                Text(
+                    text = buildString {
+                        append(result.notes)
+                        if (result.workingSources.isNotEmpty()) {
+                            append(" · ")
+                            append("${result.sampleRateHz} Hz")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (result.workingSources.isEmpty()) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                TextButton(onClick = { probeResult = null }) { Text("Re-run probe") }
+            }
+        }
+    }
+}
+
 @Composable
 private fun BatteryCard() {
     val context = LocalContext.current
