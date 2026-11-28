@@ -477,7 +477,7 @@ private fun CommandCard(
                 Text(
                     text = when (val rs = recorderState) {
                         is RecordingEngine.UiState.Recording ->
-                            "Recording via ${rs.source.name.lowercase().replace('_', ' ')}"
+                            "Recording via ${rs.sourceLabel.lowercase().replace('_', ' ')}"
                         is RecordingEngine.UiState.Finalizing -> "Saving the recording…"
                         is RecordingEngine.UiState.Failed -> "Recorder: ${rs.message}"
                         RecordingEngine.UiState.Idle -> "Records as shell (privileged telephony mix)"
