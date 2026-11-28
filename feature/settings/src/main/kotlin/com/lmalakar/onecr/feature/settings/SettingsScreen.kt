@@ -1,11 +1,18 @@
 package com.lmalakar.onecr.feature.settings
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -38,6 +45,7 @@ import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Key
@@ -69,6 +77,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -144,6 +153,11 @@ fun SettingsScreen(
     autoRecordEnabled: Boolean,
     onAutoRecordChange: (Boolean) -> Unit,
     onRunCaptureProbe: suspend () -> CaptureCapability,
+    voipCaptureEnabled: Boolean,
+    onVoipCaptureChange: (Boolean) -> Unit,
+    voipArmed: Boolean,
+    onArmVoip: (Int, Intent) -> Unit,
+    onDisarmVoip: () -> Unit,
     onClearEventLog: () -> Unit,
     onRerunOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
@@ -202,6 +216,11 @@ fun SettingsScreen(
                 autoRecordEnabled = autoRecordEnabled,
                 onAutoRecordChange = onAutoRecordChange,
                 onRunCaptureProbe = onRunCaptureProbe,
+                voipCaptureEnabled = voipCaptureEnabled,
+                onVoipCaptureChange = onVoipCaptureChange,
+                voipArmed = voipArmed,
+                onArmVoip = onArmVoip,
+                onDisarmVoip = onDisarmVoip,
                 onRerunOnboarding = onRerunOnboarding,
                 onOpenPermissions = { page = SettingsPage.PERMISSIONS },
                 onOpenEventLog = { page = SettingsPage.EVENT_LOG },
@@ -249,6 +268,11 @@ private fun RootSettings(
     autoRecordEnabled: Boolean,
     onAutoRecordChange: (Boolean) -> Unit,
     onRunCaptureProbe: suspend () -> CaptureCapability,
+    voipCaptureEnabled: Boolean,
+    onVoipCaptureChange: (Boolean) -> Unit,
+    voipArmed: Boolean,
+    onArmVoip: (Int, Intent) -> Unit,
+    onDisarmVoip: () -> Unit,
     onRerunOnboarding: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenEventLog: () -> Unit,
@@ -455,6 +479,11 @@ private fun RootSettings(
             autoRecordEnabled = autoRecordEnabled,
             onAutoRecordChange = onAutoRecordChange,
             onRunProbe = onRunCaptureProbe,
+            voipCaptureEnabled = voipCaptureEnabled,
+            onVoipCaptureChange = onVoipCaptureChange,
+            voipArmed = voipArmed,
+            onArmVoip = onArmVoip,
+            onDisarmVoip = onDisarmVoip,
         )
 
         SectionHeader("Keep alive")
@@ -517,10 +546,41 @@ private fun CaptureCard(
     autoRecordEnabled: Boolean,
     onAutoRecordChange: (Boolean) -> Unit,
     onRunProbe: suspend () -> CaptureCapability,
+    voipCaptureEnabled: Boolean,
+    onVoipCaptureChange: (Boolean) -> Unit,
+    voipArmed: Boolean,
+    onArmVoip: (Int, Intent) -> Unit,
+    onDisarmVoip: () -> Unit,
 ) {
     val probeScope = rememberCoroutineScope()
     var probeResult by remember { mutableStateOf<CaptureCapability?>(null) }
     var probing by remember { mutableStateOf(false) }
+
+    // v0.3.7 arming flow: ask for the microphone first (the second capture
+    // path is optional and degrades gracefully when declined), then the
+    // system MediaProjection consent dialog. The engine's armVoip parks the
+    // consent and satisfies the Android 14 foreground-type order.
+    val context = LocalContext.current
+    val projectionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val data = result.data
+        if (result.resultCode == Activity.RESULT_OK && data != null) {
+            onArmVoip(result.resultCode, data)
+        }
+    }
+    fun requestProjection() {
+        val mpm = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
+        if (mpm != null) projectionLauncher.launch(mpm.createScreenCaptureIntent())
+    }
+    val micLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { requestProjection() }
+    fun armFlow() {
+        val micGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (micGranted) requestProjection() else micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -558,7 +618,7 @@ private fun CaptureCard(
                     Text(
                         text = when (val rs = recorderState) {
                             is RecordingEngine.UiState.Recording ->
-                                "Recording now — ${rs.source.name.lowercase().replace('_', ' ')}"
+                                "Recording now — ${rs.sourceLabel.lowercase().replace('_', ' ')}"
 
                             is RecordingEngine.UiState.Finalizing -> "Saving the file…"
                             is RecordingEngine.UiState.Failed -> "Last attempt failed: ${rs.message}"
@@ -597,6 +657,63 @@ private fun CaptureCard(
                     )
                 }
                 Switch(checked = autoRecordEnabled, onCheckedChange = onAutoRecordChange)
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // VoIP dual-path capture (v0.3.7): armed MediaProjection + mic mix.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Forum,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "VoIP call capture",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = if (voipArmed) {
+                            "Armed — internet calls (WhatsApp, Telegram…) will be recorded"
+                        } else {
+                            "Not armed. Arm once per app session to record internet calls."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = voipCaptureEnabled, onCheckedChange = onVoipCaptureChange)
+            }
+
+            if (Build.VERSION.SDK_INT >= 29) {
+                if (voipArmed) {
+                    OutlinedButton(onClick = onDisarmVoip, modifier = Modifier.fillMaxWidth()) {
+                        Text("Disarm VoIP capture")
+                    }
+                } else {
+                    Button(onClick = { armFlow() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Arm VoIP capture")
+                    }
+                }
+                Text(
+                    "Android hides other apps' call audio. oneCR mixes the playback it is " +
+                        "allowed to capture with your microphone — speakerphone keeps the " +
+                        "other side audible.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    "VoIP capture needs Android 10 or newer.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
