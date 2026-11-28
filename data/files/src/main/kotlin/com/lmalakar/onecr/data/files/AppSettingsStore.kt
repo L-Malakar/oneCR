@@ -48,6 +48,15 @@ class AppSettingsStore(context: Context) {
         get() = prefs.getLong(KEY_NOTIFICATION_LAST_SEEN, 0L)
         set(value) = prefs.edit().putLong(KEY_NOTIFICATION_LAST_SEEN, value).apply()
 
+    /**
+     * M3 (v0.3.6): start a shell recording automatically when a cellular call
+     * connects. ON by default — that is the entire point of a call recorder —
+     * and the Dashboard "Record now" button works regardless of this setting.
+     */
+    var autoRecordEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_RECORD, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_RECORD, value).apply()
+
     private companion object {
         const val KEY_ONBOARDING_DONE = "onboarding_completed"
         const val KEY_PRIVILEGE_MODE = "privilege_mode"
@@ -55,6 +64,7 @@ class AppSettingsStore(context: Context) {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_ANIMATIONS_ENABLED = "animations_enabled"
         const val KEY_NOTIFICATION_LAST_SEEN = "notification_last_seen"
+        const val KEY_AUTO_RECORD = "auto_record_enabled"
     }
 }
 
