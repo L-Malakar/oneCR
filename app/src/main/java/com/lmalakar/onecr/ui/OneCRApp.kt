@@ -407,6 +407,10 @@ fun OneCRApp(container: AppContainer) {
                         onVerifyBridge = { container.privilegeProvider.runShellCommand("id") },
                         selectedPrivilegeMode = container.privilegeProvider.mode.name,
                         onSelectPrivilegeMode = { modeName -> container.setPrivilegeMode(modeName) },
+                        recorderState = container.recorder.state,
+                        autoRecordEnabled = container.settings.autoRecordEnabled,
+                        onAutoRecordChange = { container.settings.autoRecordEnabled = it },
+                        onRunCaptureProbe = { container.recorder.probeNow() },
                         onClearEventLog = container.detection::clearLog,
                         onRerunOnboarding = {
                             onboardingIsRerun = true
