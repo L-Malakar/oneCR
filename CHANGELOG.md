@@ -4,6 +4,66 @@ All notable changes to oneCR are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project versioning
 is `MAJOR.MINOR.PATCH` from `gradle.properties` (`VERSION_NAME`).
 
+## [0.3.6] — 2026-11-28
+
+The capture release. **oneCR records cellular calls again — properly, this
+time.** The M3 capture engine that v0.3.2/v0.3.3 first sketched and the
+v0.3.4 chassis rework had reduced back to tested foundations is now rebuilt
+on the v0.3.5 module structure end to end: a privileged shell capture process
+opens the telephony audio sources, streams raw PCM into the app over its own
+channel, and the tested `WavWriter`/`RecordingJournal` pair writes the file
+with crash recovery. Plus the change that finally, permanently ends the CI
+failure streak.
+
+### Added
+- **Shell capture engine (M3).** A tiny framework-only entry point
+  (`CaptureMain`) ships inside the APK and is spawned as the adb-shell user
+  (UID 2000, which holds `CAPTURE_AUDIO_OUTPUT`) via
+  `CLASSPATH=<apk> app_process` — through a dedicated streaming `shell,v2:`
+  TLS session in embedded-ADB mode, or over binder pipes in Shizuku mode.
+  `probe` reports which (source, rate) combinations really return audio;
+  `start` streams raw 16-bit mono PCM to the app, which wraps it into a WAV.
+  The app process itself never opens the microphone — no `RECORD_AUDIO`
+  permission needed for the shell path.
+- **Capability probe + fallback chain (M3).** The probe walks VOICE_CALL →
+  VOICE_DOWNLINK/VOICE_UPLINK → MIC at 16 kHz/8 kHz/44.1 kHz, detects the
+  "opens but feeds silence" OEM quirk, and picks the chain the recorder
+  follows: VOICE_CALL → (dual, next step) → mic. The result powers source
+  selection and the new Settings diagnostics card.
+- **Auto-record (default ON)** — a detected cellular call starting drives the
+  recorder (the engine stays decoupled from :service:detection via a single
+  `onCallStateChanged` hook; VoIP auto-capture waits for the MediaProjection
+  mix). Manual recordings survive the call ending; auto ones stop with it.
+- **"Record now" on the Dashboard** — a second control row under the detection
+  Start/Stop buttons records anytime, with the live source shown while it
+  runs. The universal fallback while the probe finds nothing better.
+- **Capture card in Settings** — auto-record switch, live recorder state and
+  the **Run audio probe** button with its chain/rate report (working sources,
+  sample rate, OEM quirks — the first slice of the capture diagnostics screen).
+- **Recording notification** — a `specialUse` foreground service with a live
+  chronometer and a Stop action while a session runs; it stops itself when
+  the engine goes idle (same failed-start guard as the detection service).
+- **Journal integration** — the engine writes the v0.3.4 journal only after
+  the stream opens (a failed start leaves nothing behind), finalizes against
+  the verified file size, and the per-app-start orphan sweep still marks
+  crashed takes. `CaptureProtocolTest` ports the probe-parser and
+  chain-selection tests back into `:privilege:api`.
+- Version bumped to 0.3.6 (versionCode 14).
+
+### Fixed
+- **CI: the Maven Central 429 root cause is gone (the workflow request).**
+  Since the v0.3.2 "skip the mirror on runners" decision, every cold CI build
+  resolved Kotlin/kotlinx/third-party artifacts straight from
+  `repo.maven.apache.org`, which rate-limits GitHub Actions runner IPs with
+  HTTP 429 — a hard failure Gradle cannot retry around (the v0.3.5 retry
+  loop proved it: each attempt died on a fresh 429). `settings.gradle.kts`
+  now reverses that decision: on CI, Central-hosted artifacts resolve from
+  **Google's full Maven Central mirror** (`maven-central.storage-download
+  .googleapis.com` — a global CDN that does not rate-limit), with
+  `mavenCentral()` kept last as the canonical fallback; local builds keep
+  the Aliyun mirror exactly as before. The v0.3.5 network-tolerant retry
+  wrapper and its failure-diagnostics artifact stay as belt-and-braces.
+
 ## [0.3.5] — 2026-11-26
 
 The reliability release: a CI that finally runs, a manual update check you
@@ -135,6 +195,94 @@ never made it out of the build machine.
   Jobs gained hard `timeout-minutes`, the Gradle wrapper jar is validated
   before first use, and the setup-gradle dependency-graph submission (which
   can 401 on default token permissions) is disabled.
+
+## [0.3.3] — 2026-11-26
+
+The stopgap capture build plus the self-update release (versionCode 12).
+**v0.3.3** shipped two headline features and one CI fix.
+
+### Added
+- **Capture engine — first slice, through the app's own audio path.** The
+  Dashboard's **Record now** button and the Settings **auto-record switch**
+  (off by default in this build) drive the recording pipeline:
+  - **probe-verified source fallback** — before recording, oneCR verifies the
+    candidate audio sources actually produce sound (many OEMs accept
+    `VOICE_CALL` but feed it silence on Android 11+) and walks the chain
+    VOICE_CALL → microphone; nothing working means a clear event-log entry,
+    not empty files;
+  - **streaming WAV writer** — canonical RIFF headers, sizes patched on stop;
+    the crash-recovery journal and orphan sweep keep (and repair) recordings
+    when the process dies mid-call;
+  - **microphone-typed foreground service** with a Stop action and a privacy
+    chip, stopping itself when the session ends;
+  - **capture probe in Settings** (Settings → Capture → Run capture probe)
+    reporting exactly which sources work on the phone.
+- **Update checker — oneCR updates itself.** One public GitHub API URL,
+  throttled to once per hour, nothing identifying in the request: a
+  "oneCR v0.3.3 available" notification whose expanded form carries the
+  release notes with **Update / Cancel** actions; a full-screen **update
+  page above everything** (version banner, notes, size, "View on GitHub");
+  the **"Install unknown apps" grant** requested first, then a live-progress
+  APK download, **SHA-256 verified against SHA256SUMS.txt**, handed to the
+  system installer automatically. Cancel snoozes that version for 24 hours;
+  a newer release overrides the snooze; About → **Check for updates** runs a
+  check on demand.
+
+### Fixed
+- **The release workflow can publish again** — tag pushes never triggered the
+  build job (branches-only trigger), so the tag-gated release job was skipped
+  forever; tags now start CI.
+- **Restored two embedded-ADB protocol files** (`PairingCipher`,
+  `PairingStore`) and the HKDF test vectors lost from the source tree; the
+  full TLS 1.3 + SPAKE2 + AES-128-GCM pairing mock re-verifies the protocol.
+
+### Known limit (superseded)
+- This step recorded through the app's own audio path — most Android 11+
+  devices silence `VOICE_CALL` for normal apps, so recordings used the
+  microphone fallback (near end; far end via speakerphone). The privileged
+  shell capture dex — the telephony mix every device grants — returned as the
+  proper path in v0.3.6 after the chassis rework.
+
+## [0.3.2] — 2026-11-24
+
+The capture engine lands (M3 step 1). **oneCR records cellular calls for the
+first time** (versionCode 12): the privilege bridge paired in v0.3.0/v0.3.1
+spawns a tiny capture process as the adb-shell user — the process that holds
+`CAPTURE_AUDIO_OUTPUT` — and streams the telephony mix into a WAV file. No
+root, no PC, no extra app: the same embedded-ADB pairing, now with audio on
+the other end of the pipe.
+
+### Added
+- **Cellular call recording through the shell bridge** — a capture process
+  (`CaptureMain`, part of the APK) opens `VOICE_CALL` as UID 2000 and streams
+  raw PCM over a dedicated second TLS session; the app wraps it into a WAV.
+- **Auto-record** on detected incoming/outgoing cellular calls
+  (Settings → Capture → Auto-record calls, default ON) — recording starts
+  when the call connects and stops when it ends.
+- **Record now** button on the Dashboard — manual recording anytime, the
+  universal fallback; it keeps recording after the call ends until stopped.
+- **Capture probe** (Settings → Capture → Run audio probe) — opens every
+  privileged audio source × sample rate briefly and reports which return real
+  audio, plus the fallback chain the recorder follows (VOICE_CALL →
+  downlink+uplink dual → mic).
+- **Crash safety** — a `journal.json` per recording; if the process dies
+  mid-call, the next start sweeps the orphan, patches the WAV header sizes
+  and marks it recovered — the audio survives.
+- **Recording notification** with a live timer and a Stop action.
+
+### Fixed
+- **CI green again** — the release job's step name contained an unquoted
+  colon (`Guard: release notes for this tag must exist`), which plain YAML
+  forbids; GitHub rejected the whole workflow on every push since v0.3.0
+  (runs failed in seconds with zero jobs). The name is quoted; the file is
+  kept pure ASCII so a web-editor upload can never reintroduce invisible
+  characters.
+
+### Known limits (next M3 step)
+- VoIP calls (WhatsApp etc.) were detected but not recorded — the
+  MediaProjection playback-capture mix joins in a later M3 step.
+- The downlink/uplink **dual-stream** capture existed at the protocol level;
+  this release recorded the mixed stream.
 
 ## [0.3.1] — 2026-11-24
 
